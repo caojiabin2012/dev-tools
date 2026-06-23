@@ -128,9 +128,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/windows-installer/*
-            artifacts/linux-installer/*
-            artifacts/macos-installer/*
+            artifacts/windows-installer/**/*
+            artifacts/linux-installer/**/*
+            artifacts/macos-installer/**/*
           draft: false
           prerelease: false
         env:
