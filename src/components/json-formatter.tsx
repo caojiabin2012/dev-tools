@@ -1,65 +1,58 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
+import { JsonTree } from './json-tree'
 
 type IndentSize = 2 | 4
 
 export function JsonFormatter() {
   const [input, setInput] = useState('')
-  const [output, setOutput] = useState('')
-  const [error, setError] = useState('')
   const [indent, setIndent] = useState<IndentSize>(2)
+  const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [expandAll, setExpandAll] = useState(true)
 
-  const format = useCallback(() => {
-    setError('')
+  const parsed = useMemo(() => {
     if (!input.trim()) {
-      setOutput('')
-      return
+      setError('')
+      return null
     }
     try {
-      const parsed = JSON.parse(input)
-      setOutput(JSON.stringify(parsed, null, indent))
+      const result = JSON.parse(input)
+      setError('')
+      return result
     } catch (e) {
       setError((e as Error).message)
-      setOutput('')
-    }
-  }, [input, indent])
-
-  const compress = useCallback(() => {
-    setError('')
-    if (!input.trim()) {
-      setOutput('')
-      return
-    }
-    try {
-      const parsed = JSON.parse(input)
-      setOutput(JSON.stringify(parsed))
-    } catch (e) {
-      setError((e as Error).message)
-      setOutput('')
+      return null
     }
   }, [input])
 
-  const copyToClipboard = useCallback(async () => {
-    if (!output) return
+  const formatted = useMemo(() => {
+    if (parsed === null) return ''
+    return JSON.stringify(parsed, null, indent)
+  }, [parsed, indent])
+
+  const compress = useCallback(() => {
+    if (parsed === null) return ''
+    return JSON.stringify(parsed)
+  }, [parsed])
+
+  const copyToClipboard = useCallback(async (text: string) => {
+    if (!text) return
     try {
-      await navigator.clipboard.writeText(output)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      await navigator.clipboard.writeText(text)
     } catch {
       const textarea = document.createElement('textarea')
-      textarea.value = output
+      textarea.value = text
       document.body.appendChild(textarea)
       textarea.select()
       document.execCommand('copy')
       document.body.removeChild(textarea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
     }
-  }, [output])
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [])
 
   const clear = useCallback(() => {
     setInput('')
-    setOutput('')
     setError('')
   }, [])
 
@@ -68,15 +61,15 @@ export function JsonFormatter() {
       const text = await navigator.clipboard.readText()
       setInput(text)
     } catch {
-      // clipboard read failed silently
+      // silent
     }
   }, [])
 
   return (
-    <div className="h-full flex flex-col p-4 gap-4">
+    <div className="h-full flex flex-col p-4 gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-foreground">JSON 格式化</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <label className="text-sm text-muted-foreground">缩进:</label>
           <select
             value={indent}
@@ -89,9 +82,9 @@ export function JsonFormatter() {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
+      <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
         <div className="flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <span className="text-sm font-medium text-foreground">输入</span>
             <div className="flex gap-1">
               <button
@@ -118,40 +111,64 @@ export function JsonFormatter() {
         </div>
 
         <div className="flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <span className="text-sm font-medium text-foreground">输出</span>
-            <button
-              onClick={copyToClipboard}
-              disabled={!output}
-              className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {copied ? '已复制!' : '复制'}
-            </button>
+            <div className="flex gap-1">
+              {parsed !== null && (
+                <button
+                  onClick={() => setExpandAll(!expandAll)}
+                  className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
+                >
+                  {expandAll ? '全部折叠' : '全部展开'}
+                </button>
+              )}
+              <button
+                onClick={() => copyToClipboard(formatted)}
+                disabled={!parsed}
+                className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {copied ? '已复制!' : '复制'}
+              </button>
+            </div>
           </div>
-          <textarea
-            value={error ? `错误: ${error}` : output}
-            readOnly
-            placeholder="格式化结果..."
-            className={`flex-1 resize-none rounded-lg border p-3 font-mono text-sm min-h-0 focus:outline-none ${
+          <div
+            className={`flex-1 rounded-lg border p-3 font-mono text-sm min-h-0 overflow-auto ${
               error
                 ? 'border-destructive bg-destructive/10 text-destructive'
-                : 'border-input bg-muted text-foreground'
+                : 'border-input bg-muted'
             }`}
-            spellCheck={false}
-          />
+          >
+            {error ? (
+              <div className="text-destructive">{error}</div>
+            ) : parsed !== null ? (
+              <JsonTree value={parsed} expandAll={expandAll} indent={indent} />
+            ) : (
+              <div className="text-muted-foreground">格式化结果...</div>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="flex gap-2">
         <button
-          onClick={format}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+          onClick={() => {
+            if (parsed !== null) {
+              copyToClipboard(formatted)
+            }
+          }}
+          disabled={!parsed}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
           格式化
         </button>
         <button
-          onClick={compress}
-          className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 transition-colors"
+          onClick={() => {
+            if (parsed !== null) {
+              copyToClipboard(compress())
+            }
+          }}
+          disabled={!parsed}
+          className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50"
         >
           压缩
         </button>
