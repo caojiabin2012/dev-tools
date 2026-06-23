@@ -64,44 +64,42 @@ function CollapsibleNode({
   const suffix = type === 'array' ? ']' : '}'
   const bracketColor = type === 'array' ? 'text-blue-400' : 'text-amber-400'
 
-  const indentation = '  '.repeat(depth)
-  const childIndentation = '  '.repeat(depth + 1)
+  const pad = (level: number) => `${level * indent * 0.6}em`
 
   if (!expanded) {
     const count = entries.length
     const label = type === 'array' ? `${count} items` : `${count} keys`
     return (
       <div className="leading-relaxed">
-        <span style={{ paddingLeft: depth * indent * 4 }}>{indentation}</span>
-        <button
-          onClick={toggle}
-          className="inline-flex items-center gap-1 hover:bg-accent/50 rounded px-0.5 -ml-0.5"
-        >
-          <span className="text-muted-foreground text-xs">▶</span>
-          <span className={`${bracketColor}`}>{prefix}</span>
-          <span className="text-muted-foreground text-xs italic">... {label} ...</span>
-          <span className={`${bracketColor}`}>{suffix}</span>
-          {!isLast && <span className="text-muted-foreground">,</span>}
-        </button>
+        <div style={{ paddingLeft: pad(depth) }}>
+          <button
+            onClick={toggle}
+            className="inline-flex items-center gap-1 hover:bg-accent/50 rounded px-0.5"
+          >
+            <span className="text-muted-foreground text-xs">▶</span>
+            <span className={bracketColor}>{prefix}</span>
+            <span className="text-muted-foreground text-xs italic">... {label} ...</span>
+            <span className={bracketColor}>{suffix}</span>
+            {!isLast && <span className="text-muted-foreground">,</span>}
+          </button>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="leading-relaxed">
-      <div>
-        <span style={{ paddingLeft: depth * indent * 4 }}>{indentation}</span>
+      <div style={{ paddingLeft: pad(depth) }}>
         <button
           onClick={toggle}
-          className="inline-flex items-center gap-1 hover:bg-accent/50 rounded px-0.5 -ml-0.5"
+          className="inline-flex items-center gap-1 hover:bg-accent/50 rounded px-0.5"
         >
           <span className="text-muted-foreground text-xs">▼</span>
-          <span className={`${bracketColor}`}>{prefix}</span>
+          <span className={bracketColor}>{prefix}</span>
         </button>
       </div>
       {entries.map((entry, i) => (
-        <div key={entry.key}>
-          <span style={{ paddingLeft: (depth + 1) * indent * 4 }}>{childIndentation}</span>
+        <div key={entry.key} style={{ paddingLeft: pad(depth + 1) }}>
           {type === 'object' && (
             <>
               <span className="text-purple-400">"{String(entry.key)}"</span>
@@ -117,9 +115,8 @@ function CollapsibleNode({
           />
         </div>
       ))}
-      <div>
-        <span style={{ paddingLeft: depth * indent * 4 }}>{indentation}</span>
-        <span className={`${bracketColor}`}>{suffix}</span>
+      <div style={{ paddingLeft: pad(depth) }}>
+        <span className={bracketColor}>{suffix}</span>
         {!isLast && <span className="text-muted-foreground">,</span>}
       </div>
     </div>
@@ -157,7 +154,7 @@ function PrimitiveValue({
   }, [value, type])
 
   return (
-    <span className={`${colorClass}`}>
+    <span className={colorClass}>
       {display}
       {!isLast && <span className="text-muted-foreground">,</span>}
     </span>
