@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { JsonFormatter } from '@/components/json-formatter'
+import { ClipboardManager } from '@/components/clipboard'
 import { Sidebar } from '@/components/sidebar'
 
-export type ToolId = 'json-formatter'
+export type ToolId = 'json-formatter' | 'clipboard'
 
 const tools = [
   { id: 'json-formatter' as ToolId, name: 'JSON 格式化', icon: '{ }' },
+  { id: 'clipboard' as ToolId, name: '剪切板', icon: '📋' },
 ]
 
 export default function App() {
@@ -20,6 +22,7 @@ export default function App() {
       />
       <main className="flex-1 overflow-hidden">
         {activeTool === 'json-formatter' && <JsonFormatter />}
+        {activeTool === 'clipboard' && <ClipboardManager />}
       </main>
     </div>
   )

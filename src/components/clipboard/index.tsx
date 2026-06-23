@@ -1,0 +1,177 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  getClipboardItems,
+  deleteClipboardItem,
+  togglePinItem,
+  clearClipboardHistory,
+  copyToClipboard,
+} from '@/lib/clipboard-api';
+import type { ClipboardItemPreview } from '@/lib/clipboard-api';
+import { FilterBar } from './filter-bar';
+import { ClipboardItemComponent } from './clipboard-item';
+import { ClipboardDetail } from './clipboard-detail';
+
+export function ClipboardManager() {
+  const [items, setItems] = useState<ClipboardItemPreview[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [contentType, setContentType] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getClipboardItems({
+        content_type: contentType,
+        search_query: searchQuery,
+        time_filter: timeFilter,
+        limit: 100,
+        offset: 0,
+      });
+      setItems(result.items);
+      setTotalCount(result.total);
+    } catch (error) {
+      console.error('Failed to fetch clipboard items:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [contentType, timeFilter, searchQuery]);
+
+  useEffect(() => {
+    fetchItems();
+    const interval = setInterval(fetchItems, 2000);
+    return () => clearInterval(interval);
+  }, [fetchItems]);
+
+  const handleCopy = useCallback(async (id: number) => {
+    const item = items.find((i) => i.id === id);
+    if (item?.content_text) {
+      await copyToClipboard(item.content_text);
+    }
+  }, [items]);
+
+  const handlePin = useCallback(async (id: number) => {
+    try {
+      await togglePinItem(id);
+      fetchItems();
+    } catch (error) {
+      console.error('Failed to toggle pin:', error);
+    }
+  }, [fetchItems]);
+
+  const handleDelete = useCallback(async (id: number) => {
+    try {
+      await deleteClipboardItem(id);
+      if (selectedId === id) setSelectedId(null);
+      fetchItems();
+    } catch (error) {
+      console.error('Failed to delete item:', error);
+    }
+  }, [fetchItems, selectedId]);
+
+  const handleClearAll = useCallback(async () => {
+    if (confirm('确定要清空非置顶的历史记录吗？')) {
+      try {
+        await clearClipboardHistory();
+        fetchItems();
+      } catch (error) {
+        console.error('Failed to clear history:', error);
+      }
+    }
+  }, [fetchItems]);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedId((prev) => {
+        const currentIndex = items.findIndex((i) => i.id === prev);
+        const nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+        return items[nextIndex]?.id ?? null;
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedId((prev) => {
+        const currentIndex = items.findIndex((i) => i.id === prev);
+        const prevIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+        return items[prevIndex]?.id ?? null;
+      });
+    } else if (e.key === 'Enter' && selectedId) {
+      handleCopy(selectedId);
+    } else if (e.key === 'Delete' && selectedId) {
+      handleDelete(selectedId);
+    } else if (e.key === 'Escape') {
+      setSelectedId(null);
+      setDetailId(null);
+    }
+  }, [items, selectedId, handleCopy, handleDelete]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
+  useEffect(() => {
+    if (selectedId && listRef.current) {
+      const selectedElement = listRef.current.querySelector(`[data-id="${selectedId}"]`);
+      selectedElement?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedId]);
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="px-4 pt-4 pb-2">
+        <h2 className="text-xl font-semibold text-foreground">剪切板历史</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          快捷键: ↑↓ 导航 | Enter 复制 | Delete 删除 | Ctrl+P 置顶
+        </p>
+      </div>
+
+      <FilterBar
+        contentType={contentType}
+        timeFilter={timeFilter}
+        searchQuery={searchQuery}
+        totalCount={totalCount}
+        onContentTypeChange={setContentType}
+        onTimeFilterChange={setTimeFilter}
+        onSearchChange={setSearchQuery}
+        onClearAll={handleClearAll}
+      />
+
+      <div ref={listRef} className="flex-1 overflow-auto p-3 space-y-1">
+        {loading && items.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <span className="text-4xl mb-3">📋</span>
+            <p>暂无剪切板记录</p>
+            <p className="text-xs mt-1">复制的内容会自动保存到这里</p>
+          </div>
+        ) : (
+          items.map((item) => (
+            <div key={item.id} data-id={item.id}>
+              <ClipboardItemComponent
+                item={item}
+                isSelected={selectedId === item.id}
+                onSelect={setSelectedId}
+                onCopy={handleCopy}
+                onPin={handlePin}
+                onDelete={handleDelete}
+              />
+            </div>
+          ))
+        )}
+      </div>
+
+      <ClipboardDetail
+        itemId={detailId}
+        onClose={() => setDetailId(null)}
+      />
+    </div>
+  );
+}
