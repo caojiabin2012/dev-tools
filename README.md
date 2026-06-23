@@ -1,73 +1,95 @@
-# React + TypeScript + Vite
+# 开发者工具箱 (Tool Kit)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一个基于 React + TypeScript + Vite + Tauri 构建的桌面开发者工具应用。
 
-Currently, two official plugins are available:
+## 项目简介
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+这是一个轻量级的开发者工具箱桌面应用，提供常用的开发辅助工具，帮助提升日常开发效率。
 
-## React Compiler
+## 技术栈
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **前端框架**: React 18 + TypeScript
+- **构建工具**: Vite
+- **桌面框架**: Tauri (Rust 后端)
+- **语言**: 中文 (Chinese)
 
-## Expanding the ESLint configuration
+## 功能特性
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+应用目前包含以下开发工具：
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### JSON 格式化工具
+- 支持 JSON 数据的格式化与美化
+- 可自定义缩进大小 (2/4 空格)
+- 数据验证与语法检查
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### 侧边栏导航
+- 简洁的工具列表导航
+- 快速切换不同工具
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 项目结构
+
+```
+├── src/                      # React 前端源码
+│   ├── components/           # UI 组件
+│   │   ├── json-formatter.tsx  # JSON 格式化组件
+│   │   └── sidebar.tsx        # 侧边栏组件
+│   ├── App.tsx              # 主应用组件
+│   ├── main.tsx             # 入口文件
+│   └── index.css           # 全局样式
+├── src-tauri/               # Tauri Rust 后端
+│   ├── src/
+│   │   ├── lib.rs           # 库入口
+│   │   └── main.rs          # 主程序
+│   ├── Cargo.toml           # Rust 依赖配置
+│   └── tauri.conf.json      # Tauri 配置
+├── public/                 # 静态资源
+└── package.json           # Node 依赖配置
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 快速开始
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### 环境要求
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- Node.js 18+
+- pnpm (推荐) 或 npm/yarn
+- Rust 1.70+
+- Tauri CLI
+
+### 安装依赖
+
+```bash
+pnpm install
 ```
+
+### 开发模式
+
+```bash
+# 启动前端开发服务器
+pnpm dev
+
+# 或启动 Tauri 开发模式
+pnpm tauri dev
+```
+
+### 构建应用
+
+```bash
+# 构建生产版本
+pnpm tauri build
+```
+
+构建完成后，安装包将生成在 `src-tauri/target/release/bundle` 目录下。
+
+## 使用说明
+
+1. 启动应用后，在侧边栏选择需要的工具
+2. JSON 格式化工具：粘贴 JSON 文本，点击格式化按钮即可美化输出
+3. 支持深色/浅色主题切换
+
+## 许可证
+
+MIT License
+
+## 贡献指南
+
+欢迎提交 Issue 和 Pull Request！
