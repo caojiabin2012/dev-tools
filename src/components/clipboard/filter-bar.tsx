@@ -21,6 +21,7 @@ const contentTypes = [
   { value: 'all', label: '全部' },
   { value: 'text', label: '文本' },
   { value: 'image', label: '图片' },
+  { value: 'file', label: '文件' },
 ];
 
 export function FilterBar({
@@ -42,7 +43,7 @@ export function FilterBar({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="搜索剪切板内容..."
-            className="w-full pl-9 pr-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           />
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
@@ -74,8 +75,8 @@ export function FilterBar({
               onClick={() => onTimeFilterChange(filter.value)}
               className={`px-3 py-1 text-xs rounded-full transition-colors ${
                 timeFilter === filter.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-muted-foreground hover:bg-accent hover:text-blue-500'
               }`}
             >
               {filter.label}
@@ -90,8 +91,8 @@ export function FilterBar({
               onClick={() => onContentTypeChange(type.value)}
               className={`px-3 py-1 text-xs rounded-full transition-colors ${
                 contentType === type.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-muted-foreground hover:bg-accent hover:text-blue-500'
               }`}
             >
               {type.label}

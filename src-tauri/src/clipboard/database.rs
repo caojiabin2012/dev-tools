@@ -11,6 +11,9 @@ pub struct ClipboardItem {
     pub image_width: Option<i32>,
     pub image_height: Option<i32>,
     pub mime_type: Option<String>,
+    pub file_path: Option<String>,
+    pub file_name: Option<String>,
+    pub file_size: Option<i64>,
     pub is_pinned: bool,
     pub created_at: String,
 }
@@ -24,6 +27,9 @@ pub struct ClipboardItemPreview {
     pub image_width: Option<i32>,
     pub image_height: Option<i32>,
     pub mime_type: Option<String>,
+    pub file_path: Option<String>,
+    pub file_name: Option<String>,
+    pub file_size: Option<i64>,
     pub is_pinned: bool,
     pub created_at: String,
 }
@@ -51,13 +57,29 @@ impl Database {
                 image_height INTEGER,
                 mime_type TEXT,
                 is_pinned BOOLEAN DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+                updated_at DATETIME DEFAULT (datetime('now', 'localtime'))
             );
             CREATE INDEX IF NOT EXISTS idx_content_type ON clipboard_items(content_type);
             CREATE INDEX IF NOT EXISTS idx_created_at ON clipboard_items(created_at);
             CREATE INDEX IF NOT EXISTS idx_is_pinned ON clipboard_items(is_pinned);"
         )?;
+
+        // Migrate: add file columns if missing
+        let columns: Vec<String> = self.conn
+            .prepare("PRAGMA table_info(clipboard_items)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        if !columns.contains(&"file_path".to_string()) {
+            self.conn.execute_batch(
+                "ALTER TABLE clipboard_items ADD COLUMN file_path TEXT;
+                 ALTER TABLE clipboard_items ADD COLUMN file_name TEXT;
+                 ALTER TABLE clipboard_items ADD COLUMN file_size INTEGER;"
+            )?;
+        }
+
         Ok(())
     }
 
@@ -78,6 +100,15 @@ impl Database {
         Ok(self.conn.last_insert_rowid())
     }
 
+    pub fn add_file_item(&self, file_path: &str, file_name: &str, file_size: i64) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO clipboard_items (content_type, file_path, file_name, file_size) 
+             VALUES ('file', ?1, ?2, ?3)",
+            params![file_path, file_name, file_size],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
     pub fn get_items(
         &self,
         content_type: Option<&str>,
@@ -89,7 +120,8 @@ impl Database {
         let mut query = String::from(
             "SELECT id, content_type, content_text, 
                     CASE WHEN content_image IS NOT NULL THEN 1 ELSE 0 END as has_image,
-                    image_width, image_height, mime_type, is_pinned, created_at 
+                    image_width, image_height, mime_type, file_path, file_name, file_size,
+                    is_pinned, created_at 
              FROM clipboard_items WHERE 1=1"
         );
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -104,14 +136,14 @@ impl Database {
         if let Some(sq) = search_query {
             if !sq.is_empty() {
                 let idx = param_values.len() + 1;
-                query.push_str(&format!(" AND content_text LIKE ?{}", idx));
+                query.push_str(&format!(" AND (content_text LIKE ?{} OR file_name LIKE ?{})", idx, idx + 1));
+                param_values.push(Box::new(format!("%{}%", sq)));
                 param_values.push(Box::new(format!("%{}%", sq)));
             }
         }
 
         if let Some(tf) = time_filter {
             if tf != "all" {
-                let idx = param_values.len() + 1;
                 let time_condition = match tf {
                     "today" => format!(" AND date(created_at) = date('now')"),
                     "yesterday" => format!(" AND date(created_at) = date('now', '-1 day')"),
@@ -120,7 +152,6 @@ impl Database {
                     _ => String::new(),
                 };
                 query.push_str(&time_condition);
-                let _ = idx;
             }
         }
 
@@ -146,8 +177,11 @@ impl Database {
                 image_width: row.get(4)?,
                 image_height: row.get(5)?,
                 mime_type: row.get(6)?,
-                is_pinned: row.get::<_, i32>(7)? == 1,
-                created_at: row.get(8)?,
+                file_path: row.get(7)?,
+                file_name: row.get(8)?,
+                file_size: row.get(9)?,
+                is_pinned: row.get::<_, i32>(10)? == 1,
+                created_at: row.get(11)?,
             })
         })?.collect::<Result<Vec<_>>>()?;
 
@@ -157,7 +191,7 @@ impl Database {
     pub fn get_item_detail(&self, id: i64) -> Result<Option<ClipboardItem>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, content_type, content_text, content_image, image_width, image_height, 
-                    mime_type, is_pinned, created_at 
+                    mime_type, file_path, file_name, file_size, is_pinned, created_at 
              FROM clipboard_items WHERE id = ?1"
         )?;
 
@@ -170,8 +204,11 @@ impl Database {
                 image_width: row.get(4)?,
                 image_height: row.get(5)?,
                 mime_type: row.get(6)?,
-                is_pinned: row.get::<_, i32>(7)? == 1,
-                created_at: row.get(8)?,
+                file_path: row.get(7)?,
+                file_name: row.get(8)?,
+                file_size: row.get(9)?,
+                is_pinned: row.get::<_, i32>(10)? == 1,
+                created_at: row.get(11)?,
             })
         })?.collect::<Result<Vec<_>>>()?;
 
@@ -243,6 +280,24 @@ impl Database {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM clipboard_items WHERE content_type = 'text' AND content_text = ?1",
             params![text],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    pub fn is_duplicate_file(&self, file_path: &str) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM clipboard_items WHERE content_type = 'file' AND file_path = ?1",
+            params![file_path],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    pub fn is_duplicate_image(&self, image_hash: &str) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM clipboard_items WHERE content_type = 'image' AND mime_type = ?1",
+            params![image_hash],
             |row| row.get(0),
         )?;
         Ok(count > 0)

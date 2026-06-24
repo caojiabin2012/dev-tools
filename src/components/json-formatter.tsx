@@ -1,18 +1,34 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { JsonTree } from './json-tree'
+import { JsonPretty } from './json-pretty'
 import { jsonThemes } from '@/lib/json-themes'
+import { copyToClipboard as tauriCopy } from '@/lib/clipboard-api'
 
 type IndentSize = 2 | 4
+type OutputMode = 'tree' | 'compressed'
 
-export function JsonFormatter() {
-  const [input, setInput] = useState('')
+interface JsonFormatterProps {
+  initialInput?: string
+}
+
+export function JsonFormatter({ initialInput }: JsonFormatterProps) {
+  const [input, setInput] = useState(initialInput ?? '')
   const [indent, setIndent] = useState<IndentSize>(2)
   const [themeIndex, setThemeIndex] = useState(0)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [expandAll, setExpandAll] = useState(true)
+  const [outputMode, setOutputMode] = useState<OutputMode>('tree')
 
   const theme = jsonThemes[themeIndex]
+
+  useEffect(() => {
+    if (initialInput !== undefined) {
+      setInput(initialInput)
+      setError('')
+      setOutputMode('tree')
+    }
+  }, [initialInput])
 
   const parsed = useMemo(() => {
     if (!input.trim()) {
@@ -34,40 +50,58 @@ export function JsonFormatter() {
     return JSON.stringify(parsed, null, indent)
   }, [parsed, indent])
 
-  const compress = useCallback(() => {
-    if (parsed === null) return ''
-    return JSON.stringify(parsed)
-  }, [parsed])
+  const compressed = useMemo(() => {
+    if (!formatted) return ''
+    return JSON.stringify(JSON.parse(formatted))
+  }, [formatted])
 
-  const copyToClipboard = useCallback(async (text: string) => {
+  const handleCopy = useCallback(async (text: string) => {
     if (!text) return
     try {
-      await navigator.clipboard.writeText(text)
+      await tauriCopy(text)
     } catch {
-      const textarea = document.createElement('textarea')
-      textarea.value = text
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
+      // silent
     }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }, [])
 
+  const handleFormat = useCallback(() => {
+    if (parsed === null) return
+    setExpandAll(true)
+    setOutputMode('tree')
+  }, [parsed])
+
+  const handleCompress = useCallback(() => {
+    if (parsed === null || !formatted) return
+    setOutputMode('compressed')
+  }, [parsed, formatted])
+
   const clear = useCallback(() => {
     setInput('')
     setError('')
+    setOutputMode('tree')
   }, [])
 
   const handlePaste = useCallback(async () => {
     try {
       const text = await navigator.clipboard.readText()
       setInput(text)
+      setOutputMode('tree')
     } catch {
       // silent
     }
   }, [])
+
+  const handleInputChange = (value: string) => {
+    setInput(value)
+    setOutputMode('tree')
+  }
+
+  const copyText =
+    outputMode === 'compressed' ? compressed : formatted
+
+  const outputLabel = outputMode === 'compressed' ? '（压缩）' : ''
 
   return (
     <div className="h-full flex flex-col p-4 gap-3">
@@ -87,7 +121,10 @@ export function JsonFormatter() {
           <label className="text-sm text-muted-foreground">缩进:</label>
           <select
             value={indent}
-            onChange={(e) => setIndent(Number(e.target.value) as IndentSize)}
+            onChange={(e) => {
+              setIndent(Number(e.target.value) as IndentSize)
+              setOutputMode('tree')
+            }}
             className="px-2 py-1 text-sm border border-input rounded-md bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value={2}>2 空格</option>
@@ -117,7 +154,7 @@ export function JsonFormatter() {
           </div>
           <textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => handleInputChange(e.target.value)}
             placeholder="在此粘贴或输入 JSON..."
             className="flex-1 resize-none rounded-lg border border-input bg-card p-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring min-h-0"
             spellCheck={false}
@@ -126,9 +163,11 @@ export function JsonFormatter() {
 
         <div className="flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm font-medium text-foreground">输出</span>
+            <span className="text-sm font-medium text-foreground">
+              输出{outputLabel}
+            </span>
             <div className="flex gap-1">
-              {parsed !== null && (
+              {parsed !== null && outputMode === 'tree' && (
                 <button
                   onClick={() => setExpandAll(!expandAll)}
                   className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
@@ -137,7 +176,7 @@ export function JsonFormatter() {
                 </button>
               )}
               <button
-                onClick={() => copyToClipboard(formatted)}
+                onClick={() => handleCopy(copyText)}
                 disabled={!parsed}
                 className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -154,6 +193,8 @@ export function JsonFormatter() {
           >
             {error ? (
               <div className="text-destructive">{error}</div>
+            ) : parsed !== null && outputMode === 'compressed' ? (
+              <JsonPretty text={compressed} theme={theme} compressed />
             ) : parsed !== null ? (
               <JsonTree value={parsed} expandAll={expandAll} indent={indent} theme={theme} />
             ) : (
@@ -165,20 +206,16 @@ export function JsonFormatter() {
 
       <div className="flex gap-2">
         <button
-          onClick={() => {
-            if (parsed !== null) copyToClipboard(formatted)
-          }}
+          onClick={handleFormat}
           disabled={!parsed}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           格式化
         </button>
         <button
-          onClick={() => {
-            if (parsed !== null) copyToClipboard(compress())
-          }}
+          onClick={handleCompress}
           disabled={!parsed}
-          className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50"
+          className="px-4 py-2 border border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           压缩
         </button>

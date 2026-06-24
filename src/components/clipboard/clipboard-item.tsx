@@ -1,12 +1,16 @@
+import { useState, useEffect } from 'react';
 import type { ClipboardItemPreview } from '@/lib/clipboard-api';
+import { detectJsonText } from '@/lib/json-detect';
 
 interface ClipboardItemProps {
   item: ClipboardItemPreview;
   isSelected: boolean;
+  isCopied?: boolean;
   onSelect: (id: number) => void;
   onCopy: (id: number) => void;
   onPin: (id: number) => void;
   onDelete: (id: number) => void;
+  onFormatJson?: (text: string) => void;
 }
 
 function formatTime(dateStr: string): string {
@@ -36,22 +40,68 @@ function truncateText(text: string, maxLength: number = 100): string {
   return text.substring(0, maxLength) + '...';
 }
 
+function formatFileSize(bytes: number | null): string {
+  if (bytes === null || bytes === undefined) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function getFileIcon(fileName: string | null): string {
+  if (!fileName) return '📄';
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  const iconMap: Record<string, string> = {
+    pdf: '📕',
+    doc: '📘', docx: '📘',
+    xls: '📗', xlsx: '📗', csv: '📗',
+    ppt: '📙', pptx: '📙',
+    zip: '🗜️', rar: '🗜️', '7z': '🗜️', tar: '🗜️', gz: '🗜️',
+    mp3: '🎵', wav: '🎵', flac: '🎵', aac: '🎵',
+    mp4: '🎬', avi: '🎬', mkv: '🎬', mov: '🎬', wmv: '🎬',
+    jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', bmp: '🖼️', svg: '🖼️', webp: '🖼️',
+    exe: '⚙️', msi: '⚙️',
+    js: '📜', ts: '📜', py: '📜', rs: '📜', go: '📜', java: '📜', cpp: '📜', c: '📜',
+    html: '🌐', css: '🌐', json: '📋', xml: '📋', yaml: '📋', yml: '📋',
+    txt: '📝', md: '📝', log: '📝',
+    ttf: '🔤', otf: '🔧', woff: '🔤',
+  };
+  return iconMap[ext] || '📄';
+}
+
 export function ClipboardItemComponent({
   item,
   isSelected,
+  isCopied = false,
   onSelect,
   onCopy,
   onPin,
   onDelete,
+  onFormatJson,
 }: ClipboardItemProps) {
+  const [localCopied, setLocalCopied] = useState(false);
+  const showCopied = isCopied || localCopied;
   const isText = item.content_type === 'text';
+  const isImage = item.content_type === 'image';
+  const isFile = item.content_type === 'file';
+  const jsonInfo = isText ? detectJsonText(item.content_text) : null;
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onCopy(item.id);
+    setLocalCopied(true);
+    setTimeout(() => setLocalCopied(false), 1500);
+  };
+
+  const typeLabel = isText ? '文本' : isImage ? '图片' : '文件';
+  const typeColor = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
 
   return (
     <div
       onClick={() => onSelect(item.id)}
       className={`group relative p-3 rounded-lg cursor-pointer transition-all ${
         isSelected
-          ? 'bg-accent ring-2 ring-ring'
+          ? 'bg-blue-500/10 ring-2 ring-blue-500'
           : 'hover:bg-accent/50'
       }`}
     >
@@ -64,41 +114,95 @@ export function ClipboardItemComponent({
             {item.is_pinned && (
               <span className="text-xs text-yellow-500">📌</span>
             )}
-            <span className={`text-xs px-1.5 py-0.5 rounded ${
-              isText ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
-                     : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-            }`}>
-              {isText ? '文本' : '图片'}
+            <span className={`text-xs px-1.5 py-0.5 rounded ${typeColor}`}>
+              {jsonInfo ? 'JSON' : typeLabel}
             </span>
+            {jsonInfo?.isStringWrapped && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300">
+                字符串
+              </span>
+            )}
           </div>
           
           {isText ? (
-            <p className="text-sm text-foreground break-all line-clamp-2">
-              {item.content_text ? truncateText(item.content_text) : '(空)'}
+            <p className={`text-sm text-foreground break-all line-clamp-2 ${jsonInfo ? 'font-mono' : ''}`}>
+              {item.content_text
+                ? jsonInfo
+                  ? truncateText(
+                      JSON.stringify(JSON.parse(jsonInfo.formatterInput)),
+                      120,
+                    )
+                  : truncateText(item.content_text)
+                : '(空)'}
             </p>
-          ) : (
-            <div className="flex items-center gap-2">
-              {item.has_image && (
-                <div className="w-16 h-16 rounded bg-muted flex items-center justify-center">
+          ) : isImage ? (
+            <div
+              className="flex items-center gap-2 cursor-zoom-in"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(item.id);
+              }}
+              title="点击预览"
+            >
+              <div className="w-16 h-16 rounded bg-muted flex items-center justify-center overflow-hidden ring-1 ring-border hover:ring-blue-500 transition-all">
+                {item.has_image ? (
+                  <ImageThumbnail itemId={item.id} />
+                ) : (
                   <span className="text-2xl">🖼️</span>
-                </div>
-              )}
+                )}
+              </div>
               <span className="text-xs text-muted-foreground">
                 {item.image_width}×{item.image_height}
               </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                <span className="text-xl">{getFileIcon(item.file_name)}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-foreground truncate">
+                  {item.file_name || '未知文件'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatFileSize(item.file_size)}
+                </p>
+              </div>
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {jsonInfo && onFormatJson && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onFormatJson(jsonInfo.formatterInput);
+              }}
+              className="p-1.5 rounded hover:bg-background text-blue-500 hover:text-blue-600"
+              title="JSON 格式化"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+              </svg>
+            </button>
+          )}
           <button
-            onClick={(e) => { e.stopPropagation(); onCopy(item.id); }}
-            className="p-1.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
-            title="复制"
+            onClick={handleCopy}
+            className={`p-1.5 rounded transition-colors ${
+              showCopied
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                : 'hover:bg-background text-muted-foreground hover:text-blue-500'
+            }`}
+            title={isFile ? '复制文件路径' : isImage ? '复制图片' : '复制文本'}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
+            {showCopied ? (
+              <span className="text-xs font-medium px-0.5">已复制</span>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            )}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onPin(item.id); }}
@@ -120,4 +224,56 @@ export function ClipboardItemComponent({
       </div>
     </div>
   );
+}
+
+function ImageThumbnail({ itemId }: { itemId: number }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('@/lib/clipboard-api').then(({ getClipboardItemDetail }) => {
+      getClipboardItemDetail(itemId).then((detail) => {
+        if (cancelled) return;
+        
+        if (!detail) {
+          setError('Failed to load detail');
+          return;
+        }
+        
+        if (!detail.content_image || detail.content_image.length === 0) {
+          setError('No image data');
+          return;
+        }
+        
+        try {
+          const uint8Array = new Uint8Array(detail.content_image);
+          let binary = '';
+          for (let i = 0; i < uint8Array.length; i++) {
+            binary += String.fromCharCode(uint8Array[i]);
+          }
+          const base64 = btoa(binary);
+          setSrc(`data:${detail.mime_type || 'image/png'};base64,${base64}`);
+        } catch (e) {
+          setError('Failed to convert image');
+          console.error('ImageThumbnail conversion error:', e);
+        }
+      }).catch((e) => {
+        if (!cancelled) {
+          setError('Failed to fetch detail');
+          console.error('ImageThumbnail fetch error:', e);
+        }
+      });
+    });
+    return () => { cancelled = true; };
+  }, [itemId]);
+
+  if (error) {
+    console.warn(`ImageThumbnail error for item ${itemId}:`, error);
+    return <span className="text-2xl">🖼️</span>;
+  }
+
+  if (!src) return <span className="text-2xl">🖼️</span>;
+
+  return <img src={src} alt="" className="w-full h-full object-cover" />;
 }

@@ -8,6 +8,9 @@ export interface ClipboardItemPreview {
   image_width: number | null;
   image_height: number | null;
   mime_type: string | null;
+  file_path: string | null;
+  file_name: string | null;
+  file_size: number | null;
   is_pinned: boolean;
   created_at: string;
 }
@@ -20,6 +23,9 @@ export interface ClipboardItemDetail {
   image_width: number | null;
   image_height: number | null;
   mime_type: string | null;
+  file_path: string | null;
+  file_name: string | null;
+  file_size: number | null;
   is_pinned: boolean;
   created_at: string;
 }
@@ -63,4 +69,33 @@ export async function copyToClipboard(text: string): Promise<void> {
 
 export async function pasteFromClipboard(): Promise<string> {
   return invoke('paste_from_clipboard');
+}
+
+export async function copyImageToClipboard(itemId: number): Promise<void> {
+  return invoke('copy_image_to_clipboard', { itemId });
+}
+
+export async function openFile(filePath: string): Promise<void> {
+  return invoke('open_file', { filePath });
+}
+
+export async function openFileContainingFolder(filePath: string): Promise<void> {
+  return invoke('open_file_containing_folder', { filePath });
+}
+
+export interface OcrRegion {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface OcrResult {
+  text: string;
+  regions: OcrRegion[];
+}
+
+export async function ocrImage(imageData: number[]): Promise<OcrResult> {
+  return invoke('ocr_image', { imageData });
 }

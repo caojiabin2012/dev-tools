@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Tool Kit - 开发者工具箱",
         "width": 1200,
         "height": 800,
@@ -22,8 +23,20 @@
         "center": true
       }
     ],
+    "trayIcon": {
+      "iconPath": "icons/32x32.png",
+      "tooltip": "Tool Kit"
+    },
     "security": {
       "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/nicepkg/tool-kit/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
     }
   },
   "bundle": {

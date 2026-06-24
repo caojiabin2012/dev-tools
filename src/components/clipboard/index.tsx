@@ -5,13 +5,18 @@ import {
   togglePinItem,
   clearClipboardHistory,
   copyToClipboard,
+  copyImageToClipboard,
 } from '@/lib/clipboard-api';
 import type { ClipboardItemPreview } from '@/lib/clipboard-api';
 import { FilterBar } from './filter-bar';
 import { ClipboardItemComponent } from './clipboard-item';
 import { ClipboardDetail } from './clipboard-detail';
 
-export function ClipboardManager() {
+interface ClipboardManagerProps {
+  onFormatJson: (text: string) => void;
+}
+
+export function ClipboardManager({ onFormatJson }: ClipboardManagerProps) {
   const [items, setItems] = useState<ClipboardItemPreview[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [contentType, setContentType] = useState('all');
@@ -19,6 +24,7 @@ export function ClipboardManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -47,10 +53,32 @@ export function ClipboardManager() {
     return () => clearInterval(interval);
   }, [fetchItems]);
 
+  const handleSelect = useCallback((id: number) => {
+    setSelectedId(id);
+    const item = items.find((i) => i.id === id);
+    if (item?.content_type === 'image') {
+      setDetailId(id);
+    }
+  }, [items]);
+
   const handleCopy = useCallback(async (id: number) => {
     const item = items.find((i) => i.id === id);
-    if (item?.content_text) {
-      await copyToClipboard(item.content_text);
+    if (!item) return;
+
+    try {
+      if (item.content_type === 'text' && item.content_text) {
+        await copyToClipboard(item.content_text);
+      } else if (item.content_type === 'image') {
+        await copyImageToClipboard(id);
+      } else if (item.content_type === 'file' && item.file_path) {
+        await copyToClipboard(item.file_path);
+      } else {
+        return;
+      }
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch (error) {
+      console.error('Failed to copy item:', error);
     }
   }, [items]);
 
@@ -67,11 +95,12 @@ export function ClipboardManager() {
     try {
       await deleteClipboardItem(id);
       if (selectedId === id) setSelectedId(null);
+      if (detailId === id) setDetailId(null);
       fetchItems();
     } catch (error) {
       console.error('Failed to delete item:', error);
     }
-  }, [fetchItems, selectedId]);
+  }, [fetchItems, selectedId, detailId]);
 
   const handleClearAll = useCallback(async () => {
     if (confirm('确定要清空非置顶的历史记录吗？')) {
@@ -100,14 +129,19 @@ export function ClipboardManager() {
         return items[prevIndex]?.id ?? null;
       });
     } else if (e.key === 'Enter' && selectedId) {
+      e.preventDefault();
       handleCopy(selectedId);
-    } else if (e.key === 'Delete' && selectedId) {
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+      e.preventDefault();
       handleDelete(selectedId);
     } else if (e.key === 'Escape') {
       setSelectedId(null);
       setDetailId(null);
+    } else if (e.ctrlKey && e.key === 'p' && selectedId) {
+      e.preventDefault();
+      handlePin(selectedId);
     }
-  }, [items, selectedId, handleCopy, handleDelete]);
+  }, [items, selectedId, handleCopy, handleDelete, handlePin]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -126,7 +160,7 @@ export function ClipboardManager() {
       <div className="px-4 pt-4 pb-2">
         <h2 className="text-xl font-semibold text-foreground">剪切板历史</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          快捷键: ↑↓ 导航 | Enter 复制 | Delete 删除 | Ctrl+P 置顶
+          快捷键: ↑↓ 导航 | Enter 复制 | Delete 删除 | Ctrl+P 置顶 | 点击图片预览
         </p>
       </div>
 
@@ -144,7 +178,7 @@ export function ClipboardManager() {
       <div ref={listRef} className="flex-1 overflow-auto p-3 space-y-1">
         {loading && items.length === 0 ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -158,10 +192,12 @@ export function ClipboardManager() {
               <ClipboardItemComponent
                 item={item}
                 isSelected={selectedId === item.id}
-                onSelect={setSelectedId}
+                isCopied={copiedId === item.id}
+                onSelect={handleSelect}
                 onCopy={handleCopy}
                 onPin={handlePin}
                 onDelete={handleDelete}
+                onFormatJson={onFormatJson}
               />
             </div>
           ))

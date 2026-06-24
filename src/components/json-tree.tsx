@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import type { JsonTheme } from '@/lib/json-themes'
 
 interface JsonTreeProps {
@@ -52,6 +52,10 @@ function CollapsibleNode({
   depth: number
 }) {
   const [expanded, setExpanded] = useState(expandAll)
+
+  useEffect(() => {
+    setExpanded(expandAll)
+  }, [expandAll])
 
   const entries = useMemo(() => {
     if (type === 'array') {
