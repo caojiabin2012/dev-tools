@@ -1,8 +1,13 @@
 import type { ReactNode } from 'react'
 import type { ToolId } from '@/App'
 
-interface SidebarProps {
+interface ToolGroup {
+  name: string
   tools: { id: ToolId; name: string; icon: string }[]
+}
+
+interface SidebarProps {
+  toolGroups: ToolGroup[]
   activeTool: ToolId
   onSelect: (id: ToolId) => void
   onOpenSettings: () => void
@@ -37,7 +42,7 @@ function HeaderIconButton({
 }
 
 export function Sidebar({
-  tools,
+  toolGroups,
   activeTool,
   onSelect,
   onOpenSettings,
@@ -70,20 +75,29 @@ export function Sidebar({
         <p className="text-xs text-muted-foreground mt-1">开发者工具箱</p>
       </div>
 
-      <nav className="flex-1 p-2 space-y-1">
-        {tools.map((tool) => (
-          <button
-            key={tool.id}
-            onClick={() => onSelect(tool.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-              activeTool === tool.id
-                ? 'bg-accent text-accent-foreground font-medium'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-            }`}
-          >
-            <span className="font-mono text-base w-6 text-center">{tool.icon}</span>
-            {tool.name}
-          </button>
+      <nav className="flex-1 overflow-y-auto p-2">
+        {toolGroups.map((group) => (
+          <div key={group.name} className="mb-3">
+            <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              {group.name}
+            </div>
+            <div className="space-y-0.5">
+              {group.tools.map((tool) => (
+                <button
+                  key={tool.id}
+                  onClick={() => onSelect(tool.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    activeTool === tool.id
+                      ? 'bg-accent text-accent-foreground font-medium'
+                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                  }`}
+                >
+                  <span className="font-mono text-base w-6 text-center">{tool.icon}</span>
+                  {tool.name}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
     </aside>

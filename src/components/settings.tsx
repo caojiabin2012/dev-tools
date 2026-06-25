@@ -1,6 +1,6 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
-import { getSettings, saveSettings, getAppVersion } from '@/lib/settings-api';
+import { getSettings, saveSettings, getAppVersion, updateShortcuts } from '@/lib/settings-api';
 import type { AppSettings, UpdateInfo } from '@/lib/settings-api';
 import type { Theme } from '@/lib/use-theme';
 
@@ -16,6 +16,12 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'general', label: '通用' },
   { id: 'advanced', label: '高级' },
   { id: 'about', label: '关于' },
+];
+
+const SHORTCUT_TOOLS: { id: string; name: string; icon: string; defaultShortcut: string }[] = [
+  { id: 'clipboard', name: '剪切板', icon: '📋', defaultShortcut: 'Ctrl+Shift+V' },
+  { id: 'json-formatter', name: 'JSON 格式化', icon: '📝', defaultShortcut: '' },
+  { id: 'calculator', name: '计算器', icon: '🧮', defaultShortcut: '' },
 ];
 
 interface SettingsProps {
@@ -41,10 +47,12 @@ export function Settings({
   updateChecked,
   onCheckUpdate,
 }: SettingsProps) {
-  const [settings, setSettings] = useState<AppSettings>({ auto_start: false, close_to_tray: true });
+  const [settings, setSettings] = useState<AppSettings>({ auto_start: false, close_to_tray: true, shortcuts: {} });
   const [version, setVersion] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [editingShortcut, setEditingShortcut] = useState<string | null>(null);
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
 
   useEffect(() => {
     getSettings().then(setSettings).catch(console.error);
@@ -57,7 +65,7 @@ export function Settings({
     setSettings(next);
     setSaveError(null);
     try {
-      const updated = await saveSettings(next.auto_start, next.close_to_tray);
+      const updated = await saveSettings(next.auto_start, next.close_to_tray, next.shortcuts);
       setSettings(updated);
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -65,6 +73,72 @@ export function Settings({
       setSaveError(String(error));
     }
   };
+
+  const handleShortcutChange = useCallback(async (toolId: string, shortcut: string) => {
+    setShortcutError(null);
+    const prev = settings;
+    const newShortcuts = { ...settings.shortcuts };
+
+    if (shortcut) {
+      // Check for conflicts
+      const conflict = Object.entries(newShortcuts).find(
+        ([id, s]) => id !== toolId && s === shortcut
+      );
+      if (conflict) {
+        setShortcutError(`快捷键 ${shortcut} 已被 ${SHORTCUT_TOOLS.find(t => t.id === conflict[0])?.name || conflict[0]} 使用`);
+        return;
+      }
+
+      // Validate format
+      if (!/^(Ctrl|Alt|Shift|Meta)(\+(Ctrl|Alt|Shift|Meta))*\+[A-Za-z0-9]+$/.test(shortcut) && shortcut !== '') {
+        setShortcutError('快捷键格式不正确，例如：Ctrl+Shift+V');
+        return;
+      }
+
+      newShortcuts[toolId] = shortcut;
+    } else {
+      delete newShortcuts[toolId];
+    }
+
+    const next = { ...settings, shortcuts: newShortcuts };
+    setSettings(next);
+    try {
+      await updateShortcuts(newShortcuts);
+    } catch (error) {
+      console.error('Failed to update shortcuts:', error);
+      setSettings(prev);
+      setShortcutError(String(error));
+    }
+  }, [settings]);
+
+  const handleShortcutKeyDown = useCallback((e: React.KeyboardEvent, toolId: string) => {
+    if (e.key === 'Escape') {
+      setEditingShortcut(null);
+      return;
+    }
+
+    if (editingShortcut !== toolId) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const parts: string[] = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    if (e.metaKey) parts.push('Meta');
+
+    // Only add the key if it's not a modifier
+    if (!['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+      const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+      parts.push(key);
+    }
+
+    if (parts.length > 1) {
+      handleShortcutChange(toolId, parts.join('+'));
+      setEditingShortcut(null);
+    }
+  }, [editingShortcut, handleShortcutChange]);
 
   const handleDownloadUpdate = async () => {
     if (!updateInfo?.download_url) return;
@@ -125,6 +199,66 @@ export function Settings({
                 onChange={(v) => handleToggle('close_to_tray', v)}
               />
 
+              <SectionTitle title="快捷键" className="mt-8" />
+              <p className="text-xs text-muted-foreground -mt-2">
+                点击输入框后按下键盘快捷键，按 Esc 取消
+              </p>
+              {shortcutError && (
+                <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                  {shortcutError}
+                </div>
+              )}
+              <div className="space-y-2">
+                {SHORTCUT_TOOLS.map((tool) => {
+                  const currentShortcut = settings.shortcuts[tool.id] || '';
+                  const isEditing = editingShortcut === tool.id;
+
+                  return (
+                    <div
+                      key={tool.id}
+                      className="flex items-center justify-between p-4 bg-card rounded-lg border border-border"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{tool.icon}</span>
+                        <div>
+                          <h3 className="text-sm font-medium text-foreground">{tool.name}</h3>
+                          <p className="text-xs text-muted-foreground">
+                            {currentShortcut ? '已设置快捷键' : '未设置快捷键'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setEditingShortcut(isEditing ? null : tool.id)}
+                          className={`px-3 py-1.5 text-sm font-mono rounded-lg border transition-colors min-w-[120px] text-center ${
+                            isEditing
+                              ? 'border-primary bg-primary/10 text-primary animate-pulse'
+                              : currentShortcut
+                              ? 'border-border bg-secondary text-foreground hover:bg-secondary/80'
+                              : 'border-dashed border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50'
+                          }`}
+                        >
+                          {isEditing
+                            ? '按下快捷键...'
+                            : currentShortcut || '点击设置'}
+                        </button>
+                        {currentShortcut && !isEditing && (
+                          <button
+                            onClick={() => handleShortcutChange(tool.id, '')}
+                            className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                            title="清除快捷键"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
               <SectionTitle title="外观" className="mt-8" />
               <ThemeSelector theme={theme} onChange={onThemeChange} />
             </div>
@@ -132,13 +266,7 @@ export function Settings({
 
           {activeTab === 'advanced' && (
             <div className="space-y-4">
-              <SectionTitle title="快捷键" />
-              <InfoCard title="显示 / 隐藏窗口">
-                <kbd className="px-2 py-1 bg-muted rounded text-sm font-mono">Ctrl+Shift+V</kbd>
-                <p className="text-xs text-muted-foreground mt-2">全局快捷键，可在任意应用中切换窗口显示状态</p>
-              </InfoCard>
-
-              <SectionTitle title="数据存储" className="mt-8" />
+              <SectionTitle title="数据存储" />
               <InfoCard title="本地数据目录">
                 <code className="text-xs text-muted-foreground break-all">
                   %LOCALAPPDATA%\tool-kit
@@ -229,6 +357,16 @@ export function Settings({
           )}
         </div>
       </div>
+
+      {/* Global keyboard listener for shortcut recording */}
+      {editingShortcut && (
+        <div
+          className="fixed inset-0 z-50"
+          onKeyDown={(e) => handleShortcutKeyDown(e, editingShortcut)}
+          tabIndex={-1}
+          autoFocus
+        />
+      )}
     </div>
   );
 }

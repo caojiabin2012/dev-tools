@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use crate::clipboard::{Database, ClipboardDbState, ClipboardMonitor};
@@ -27,6 +27,56 @@ fn toggle_main_window(app: &tauri::AppHandle) {
             hide_main_window(&window);
         } else {
             show_main_window(&window);
+        }
+    }
+}
+
+pub fn register_shortcuts_for_app(app: &tauri::AppHandle, shortcuts: &std::collections::HashMap<String, String>) {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+    let _ = app.global_shortcut().unregister_all();
+
+    for (tool_id, shortcut_str) in shortcuts {
+        let id = tool_id.clone();
+        let handle = app.clone();
+        let result = app.global_shortcut().on_shortcut(
+            shortcut_str.as_str(),
+            move |_app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    if let Some(window) = handle.get_webview_window("main") {
+                        show_main_window(&window);
+                        let _ = handle.emit("shortcut-triggered", &id);
+                    }
+                }
+            },
+        );
+        if let Err(e) = result {
+            log::warn!("Failed to register shortcut {} for {}: {}", shortcut_str, tool_id, e);
+        }
+    }
+}
+
+fn register_shortcuts(app: &tauri::App, shortcuts: &std::collections::HashMap<String, String>) {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+    let _ = app.global_shortcut().unregister_all();
+
+    for (tool_id, shortcut_str) in shortcuts {
+        let id = tool_id.clone();
+        let handle = app.handle().clone();
+        let result = app.global_shortcut().on_shortcut(
+            shortcut_str.as_str(),
+            move |_app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    if let Some(window) = handle.get_webview_window("main") {
+                        show_main_window(&window);
+                        let _ = handle.emit("shortcut-triggered", &id);
+                    }
+                }
+            },
+        );
+        if let Err(e) = result {
+            log::warn!("Failed to register shortcut {} for {}: {}", shortcut_str, tool_id, e);
         }
     }
 }
@@ -71,6 +121,7 @@ pub fn run() {
     log::info!("Clipboard monitor started");
 
     let app_settings = AppSettings::load();
+    let shortcuts = app_settings.shortcuts.clone();
     let settings = Arc::new(Mutex::new(app_settings));
     let settings_for_tray = settings.clone();
 
@@ -100,10 +151,9 @@ pub fn run() {
             settings::get_app_version,
             settings::check_for_update,
             settings::download_and_install_update,
+            settings::update_shortcuts,
         ])
-        .setup(|app| {
-            use tauri_plugin_global_shortcut::GlobalShortcutExt;
-
+        .setup(move |app| {
             let app_handle = app.handle().clone();
 
             let show_item = MenuItem::with_id(app, "tray_show", "显示窗口", true, None::<&str>)?;
@@ -156,15 +206,8 @@ pub fn run() {
                 }
             });
 
-            let _ = app.global_shortcut().on_shortcut(
-                "Control+Shift+V",
-                move |_app, _shortcut, event| {
-                    use tauri_plugin_global_shortcut::ShortcutState;
-                    if event.state == ShortcutState::Pressed {
-                        toggle_main_window(&app_handle);
-                    }
-                },
-            );
+            // Register all shortcuts
+            register_shortcuts(app, &shortcuts);
 
             Ok(())
         })

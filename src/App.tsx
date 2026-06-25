@@ -1,17 +1,65 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import { JsonFormatter } from '@/components/json-formatter'
 import { ClipboardManager } from '@/components/clipboard'
+import { Calculator } from '@/components/calculator'
+import { Calendar } from '@/components/calendar'
+import { IdCardTool } from '@/components/id-card'
+import { EncodingTool } from '@/components/encoding'
+import { GeneratorTool, ToastContainer } from '@/components/generator'
+import { DevTool } from '@/components/dev-tool'
 import { Settings, type SettingsTab } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
 import { useTheme } from '@/lib/use-theme'
 import { useUpdate } from '@/lib/use-update'
 
-export type ToolId = 'json-formatter' | 'clipboard' | 'settings'
+export type ToolId =
+  | 'json-formatter' | 'clipboard' | 'calculator' | 'calendar'
+  | 'id-card' | 'encoding' | 'generator' | 'dev-tool'
+  | 'settings'
 
-const tools = [
-  { id: 'json-formatter' as ToolId, name: 'JSON 格式化', icon: '📝' },
-  { id: 'clipboard' as ToolId, name: '剪切板', icon: '📋' },
+interface ToolGroup {
+  name: string
+  tools: { id: ToolId; name: string; icon: string }[]
+}
+
+const toolGroups: ToolGroup[] = [
+  {
+    name: '常用工具',
+    tools: [
+      { id: 'json-formatter', name: 'JSON 格式化', icon: '📝' },
+      { id: 'clipboard', name: '剪切板', icon: '📋' },
+      { id: 'calculator', name: '计算器', icon: '🧮' },
+      { id: 'calendar', name: '日历', icon: '📅' },
+    ],
+  },
+  {
+    name: '编码转换',
+    tools: [
+      { id: 'encoding', name: '编码工具', icon: '🔄' },
+    ],
+  },
+  {
+    name: '生成器',
+    tools: [
+      { id: 'generator', name: '生成工具', icon: '⚡' },
+    ],
+  },
+  {
+    name: '查询解析',
+    tools: [
+      { id: 'id-card', name: '身份证工具', icon: '🪪' },
+    ],
+  },
+  {
+    name: '开发工具',
+    tools: [
+      { id: 'dev-tool', name: '开发工具', icon: '🛠️' },
+    ],
+  },
 ]
+
+const allTools = toolGroups.flatMap(g => g.tools)
 
 export default function App() {
   const [activeTool, setActiveTool] = useState<ToolId>('json-formatter')
@@ -30,10 +78,23 @@ export default function App() {
     setActiveTool('json-formatter')
   }
 
+  useEffect(() => {
+    const unlisten = listen<string>('shortcut-triggered', (event) => {
+      const toolId = event.payload as ToolId
+      const toolIds = allTools.map(t => t.id)
+      if (toolId && toolIds.includes(toolId)) {
+        setActiveTool(toolId)
+      }
+    })
+    return () => {
+      unlisten.then((fn) => fn())
+    }
+  }, [])
+
   return (
     <div className="flex h-screen bg-background">
       <Sidebar
-        tools={tools}
+        toolGroups={toolGroups}
         activeTool={activeTool}
         onSelect={setActiveTool}
         onOpenSettings={() => openSettings('general')}
@@ -47,6 +108,22 @@ export default function App() {
         {activeTool === 'clipboard' && (
           <ClipboardManager onFormatJson={openJsonFormatter} />
         )}
+        {activeTool === 'calculator' && <Calculator />}
+        <div className={activeTool === 'calendar' ? 'h-full' : 'h-0 overflow-hidden'}>
+          <Calendar />
+        </div>
+        <div className={activeTool === 'id-card' ? 'h-full' : 'h-0 overflow-hidden'}>
+          <IdCardTool />
+        </div>
+        <div className={activeTool === 'encoding' ? 'h-full' : 'h-0 overflow-hidden'}>
+          <EncodingTool />
+        </div>
+        <div className={activeTool === 'generator' ? 'h-full' : 'h-0 overflow-hidden'}>
+          <GeneratorTool />
+        </div>
+        <div className={activeTool === 'dev-tool' ? 'h-full' : 'h-0 overflow-hidden'}>
+          <DevTool />
+        </div>
         {activeTool === 'settings' && (
           <Settings
             activeTab={settingsTab}
@@ -61,6 +138,7 @@ export default function App() {
           />
         )}
       </main>
+      <ToastContainer />
     </div>
   )
 }

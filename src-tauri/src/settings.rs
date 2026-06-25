@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -10,13 +11,18 @@ pub struct SettingsState {
 pub struct AppSettings {
     pub auto_start: bool,
     pub close_to_tray: bool,
+    #[serde(default)]
+    pub shortcuts: HashMap<String, String>,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
+        let mut shortcuts = HashMap::new();
+        shortcuts.insert("clipboard".to_string(), "Ctrl+Shift+V".to_string());
         Self {
             auto_start: false,
             close_to_tray: true,
+            shortcuts,
         }
     }
 }
@@ -40,6 +46,11 @@ impl AppSettings {
         // Sync auto_start with the actual OS state on load
         if let Ok(enabled) = query_autostart_enabled() {
             settings.auto_start = enabled;
+        }
+
+        // Ensure clipboard shortcut exists with default
+        if !settings.shortcuts.contains_key("clipboard") {
+            settings.shortcuts.insert("clipboard".to_string(), "Ctrl+Shift+V".to_string());
         }
 
         settings
@@ -100,15 +111,33 @@ pub fn save_settings(
     state: State<'_, SettingsState>,
     auto_start: bool,
     close_to_tray: bool,
+    shortcuts: HashMap<String, String>,
 ) -> Result<AppSettings, String> {
     let mut settings = state.settings.lock().map_err(|e| e.to_string())?;
     settings.auto_start = auto_start;
     settings.close_to_tray = close_to_tray;
+    settings.shortcuts = shortcuts;
     settings.save()?;
 
     update_autostart(auto_start)?;
 
     Ok(settings.clone())
+}
+
+#[tauri::command]
+pub fn update_shortcuts(
+    app: tauri::AppHandle,
+    state: State<'_, SettingsState>,
+    shortcuts: HashMap<String, String>,
+) -> Result<(), String> {
+    let mut settings = state.settings.lock().map_err(|e| e.to_string())?;
+    settings.shortcuts = shortcuts;
+    settings.save()?;
+
+    // Re-register shortcuts in the app
+    crate::register_shortcuts_for_app(&app, &settings.shortcuts);
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -225,7 +254,7 @@ pub async fn download_and_install_update(download_url: String) -> Result<String,
         .map_err(|e| format!("下载失败: {e}"))?;
 
     if !resp.status().is_success() {
-        return Err(format!("下载失败 (HTTP {})", resp.status()));
+        return Err(format!("下载失败: {}", resp.status()));
     }
 
     let bytes = resp
