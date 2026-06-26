@@ -164,6 +164,7 @@ pub struct UpdateDownloadProgress {
 
 #[tauri::command]
 pub async fn install_update_and_restart(app: tauri::AppHandle) -> Result<bool, String> {
+    use futures_util::StreamExt;
     use tauri_plugin_updater::UpdaterExt;
 
     let updater = app
@@ -180,24 +181,46 @@ pub async fn install_update_and_restart(app: tauri::AppHandle) -> Result<bool, S
     };
 
     log::info!("开始下载应用更新: {}", update.version);
-    let progress_handle = app.clone();
-    let mut downloaded: u64 = 0;
-    let bytes = update
-        .download(
-            move |chunk_len, content_len| {
-                downloaded = downloaded.saturating_add(chunk_len as u64);
-                let _ = progress_handle.emit(
-                    "update-download-progress",
-                    UpdateDownloadProgress {
-                        downloaded,
-                        total: content_len,
-                    },
-                );
-            },
-            || {},
-        )
+
+    let client = reqwest::Client::builder()
+        .user_agent("tool-kit-app")
+        .build()
+        .map_err(|e| format!("创建下载客户端失败: {e}"))?;
+
+    let response = client
+        .get(update.download_url.clone())
+        .send()
         .await
         .map_err(|e| format!("下载更新失败: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("下载更新失败: HTTP {}", response.status()));
+    }
+
+    let total = response.content_length();
+    let mut downloaded: u64 = 0;
+    let mut buffer = Vec::new();
+    let mut stream = response.bytes_stream();
+    let progress_handle = app.clone();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("读取更新数据失败: {e}"))?;
+        downloaded = downloaded.saturating_add(chunk.len() as u64);
+        buffer.extend_from_slice(&chunk);
+        let _ = progress_handle.emit(
+            "update-download-progress",
+            UpdateDownloadProgress {
+                downloaded,
+                total,
+            },
+        );
+    }
+
+    log::info!(
+        "更新包下载完成: {} bytes -> {}",
+        buffer.len(),
+        update.download_url
+    );
 
     log::info!("开始安装应用更新: {}", update.version);
 
@@ -206,7 +229,7 @@ pub async fn install_update_and_restart(app: tauri::AppHandle) -> Result<bool, S
         remove_tray_icon_before_exit(&app);
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         update
-            .install(bytes)
+            .install(buffer)
             .map_err(|e| format!("Windows 更新安装失败: {e}"))?;
         return Ok(true);
     }
@@ -214,7 +237,7 @@ pub async fn install_update_and_restart(app: tauri::AppHandle) -> Result<bool, S
     #[cfg(not(target_os = "windows"))]
     {
         update
-            .install(bytes)
+            .install(buffer)
             .map_err(|e| format!("安装更新失败: {e}"))?;
         remove_tray_icon_before_exit(&app);
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
