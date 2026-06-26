@@ -240,7 +240,10 @@ struct GitHubAsset {
 }
 
 #[tauri::command]
-pub async fn download_and_install_update(download_url: String) -> Result<String, String> {
+pub async fn download_and_install_update(
+    app: tauri::AppHandle,
+    download_url: String,
+) -> Result<String, String> {
     let temp_dir = std::env::temp_dir();
     let file_name = download_url
         .rsplit('/')
@@ -248,8 +251,11 @@ pub async fn download_and_install_update(download_url: String) -> Result<String,
         .unwrap_or("update.exe");
     let installer_path = temp_dir.join(file_name);
 
-    // Download installer
-    let resp = reqwest::get(&download_url)
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&download_url)
+        .header("User-Agent", "tool-kit-app")
+        .send()
         .await
         .map_err(|e| format!("下载失败: {e}"))?;
 
@@ -267,29 +273,78 @@ pub async fn download_and_install_update(download_url: String) -> Result<String,
 
     log::info!("Update installer saved to: {}", installer_path.display());
 
-    // Launch installer silently
-    let status = if file_name.ends_with(".msi") {
-        std::process::Command::new("msiexec")
-            .args(["/i", installer_path.to_str().unwrap(), "/quiet", "/norestart"])
-            .spawn()
-            .map_err(|e| format!("启动安装器失败: {e}"))?
-            .wait()
-            .map_err(|e| format!("等待安装器失败: {e}"))?
-    } else {
-        // NSIS installer
-        std::process::Command::new(&installer_path)
-            .arg("/S")
-            .spawn()
-            .map_err(|e| format!("启动安装器失败: {e}"))?
-            .wait()
-            .map_err(|e| format!("等待安装器失败: {e}"))?
-    };
+    launch_installer(&installer_path, file_name)?;
 
-    if status.success() {
-        Ok("安装完成，应用即将重启".to_string())
+    let app_handle = app.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        app_handle.exit(0);
+    });
+
+    Ok("安装程序已启动，应用即将退出以完成更新".to_string())
+}
+
+#[cfg(windows)]
+fn launch_installer(installer_path: &std::path::Path, file_name: &str) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let path_str = installer_path.to_string_lossy().replace('\'', "''");
+    let _ = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            &format!("Unblock-File -LiteralPath '{path_str}'"),
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status();
+
+    let path = installer_path
+        .to_str()
+        .ok_or_else(|| "安装包路径无效".to_string())?;
+
+    if file_name.ends_with(".msi") {
+        std::process::Command::new("msiexec")
+            .args(["/i", path, "/passive", "/norestart"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("启动安装器失败: {e}"))?;
     } else {
-        Err(format!("安装器退出码: {}", status.code().unwrap_or(-1)))
+        std::process::Command::new(path)
+            .arg("/S")
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("启动安装器失败: {e}"))?;
     }
+
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn launch_installer(installer_path: &std::path::Path, _file_name: &str) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mut perms = std::fs::metadata(installer_path)
+        .map_err(|e| format!("读取安装包权限失败: {e}"))?
+        .permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(installer_path, perms)
+        .map_err(|e| format!("设置安装包权限失败: {e}"))?;
+
+    std::process::Command::new(installer_path)
+        .spawn()
+        .map_err(|e| format!("启动安装器失败: {e}"))?;
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn launch_installer(installer_path: &std::path::Path, _file_name: &str) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(installer_path)
+        .spawn()
+        .map_err(|e| format!("启动安装器失败: {e}"))?;
+    Ok(())
 }
 
 #[derive(Serialize)]

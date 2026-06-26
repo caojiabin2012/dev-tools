@@ -147,10 +147,6 @@ export function Settings({
     try {
       const result = await downloadAndInstallUpdate(updateInfo.download_url);
       setDownloadProgress(result);
-      // 安装完成后提示用户重启
-      setTimeout(() => {
-        setDownloadProgress('安装完成，请重启应用');
-      }, 1000);
     } catch (error) {
       console.error('Failed to download update:', error);
       setDownloadProgress('下载失败: ' + String(error));
