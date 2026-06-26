@@ -1,5 +1,9 @@
 import { useState, useCallback } from 'react'
 import { notify } from '@/lib/toast'
+
+type TabType = 'uuid' | 'password'
+
+export function GeneratorTool() {
   const [tab, setTab] = useState<TabType>('password')
 
   return (
@@ -28,8 +32,6 @@ import { notify } from '@/lib/toast'
     </div>
   )
 }
-
-type TabType = 'uuid' | 'password'
 
 function UuidTool() {
   const [count, setCount] = useState(10)

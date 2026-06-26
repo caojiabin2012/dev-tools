@@ -183,7 +183,7 @@ export function Calendar() {
         {/* 日历网格 */}
         <div className="grid grid-cols-7 gap-1 flex-1">
           {calendar.map((day, index) => {
-            const dateStr = formatDate(date)
+            const dateStr = formatDate(day.date)
             const isSelected = dateStr === formatDate(selectedDate)
             const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6
 
