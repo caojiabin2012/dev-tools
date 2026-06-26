@@ -142,6 +142,10 @@ jobs:
           find_mac_tar() {
             find artifacts/macos-installer -name "*.tar.gz" -type f 2>/dev/null | head -1
           }
+          # GitHub Release 会把产物名里的空格变成点（Tool Kit -> Tool.Kit）
+          release_filename() {
+            basename "$1" | tr ' ' '.'
+          }
 
           WIN_MSI=$(find_msi)
           LINUX_APPIMAGE=$(find_appimage)
@@ -149,13 +153,13 @@ jobs:
 
           win_url=""; linux_url=""; mac_url=""
           if [ -n "$WIN_MSI" ]; then
-            win_url="${BASE_URL}/$(basename "$WIN_MSI")"
+            win_url="${BASE_URL}/$(release_filename "$WIN_MSI")"
           fi
           if [ -n "$LINUX_APPIMAGE" ]; then
-            linux_url="${BASE_URL}/$(basename "$LINUX_APPIMAGE")"
+            linux_url="${BASE_URL}/$(release_filename "$LINUX_APPIMAGE")"
           fi
           if [ -n "$MAC_TAR" ]; then
-            mac_url="${BASE_URL}/$(basename "$MAC_TAR")"
+            mac_url="${BASE_URL}/$(release_filename "$MAC_TAR")"
           fi
 
           tmp_json=$(mktemp)
