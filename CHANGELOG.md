@@ -1,5 +1,72 @@
 # Tool Kit 更新日志
 
+## 2026-06-26 更新（v0.4.2）
+
+### 自动更新安装修复 ⬆️
+
+- NSIS 参数改为 `/UPDATE /P /R`（被动模式 + 安装后重启）
+- `Start-Process` 脱离父进程，延长退出等待至 2s
+- 新增 `update.log` 诊断日志
+
+---
+
+## 2026-06-26 更新（v0.4.0 / v0.4.1）
+
+### 一、首页 🏠
+
+- 新增首页：搜索 + 常用 4 项 + 全部工具网格
+- 启动默认进入首页（`activeTool: 'home'`）
+- 文档：`doc/07.home.md`
+
+### 二、日历配色优化 📅
+
+- 今天/选中/周末/节气/黄历标签统一主题 token
+- 明暗模式适配，移除硬编码蓝色
+- 文档：`doc/08.calendar.md`
+
+### 三、编码工具 · 时间戳 🕐
+
+- 日期时间固定 `YYYY-MM-DD HH:mm:ss`（上海时区）
+- 时间戳与日期时间均支持复制 + Toast 提示
+- 新增 `src/lib/date-time.ts`
+- 文档：`doc/09.encoding.md`
+
+### 四、身份证工具复制提示 🪪
+
+- 单条/全部复制成功后 Toast 提示
+- 使用 Tauri `copyToClipboard`
+- 文档：`doc/11.id-card.md`
+
+### 五、Cron 表达式修复 🛠️
+
+- 修复 `ReferenceError`（函数定义顺序）
+- 改进步长语法与日/周 OR 匹配
+- 文档：`doc/10.dev-tool.md`
+
+### 六、剪贴板 GIF 与图片 🖼️
+
+- 优先采集 GIF 原文件，避免静态缩略图覆盖
+- 修复 RGBA 偏色（移除错误 BGRA 转换）
+- 预览改用 Base64 Data URL，GIF 可播放
+- 新增 `image_io.rs`、`clipboard-image.tsx`
+- 文档：`doc/02.clipboard.md`
+
+### 七、自动更新安装修复 ⬆️ (v0.4.1)
+
+- 下载后后台启动 NSIS/MSI 安装器
+- `Unblock-File` 解除 Windows 下载拦截
+- 安装前自动退出应用释放文件锁
+- 文档：`doc/06.about.md`
+
+### 八、基础设施
+
+- 全局 Toast 抽离至 `src/lib/toast.tsx`
+- CI 构建修复（generator / toast.tsx / calendar）
+- GitHub Release 工作流 + `release-notes/` 目录
+- 版本：v0.4.0 → v0.4.1
+
+---
+
 ## 2026-06-25 更新
 
 ### 一、日历功能 📅

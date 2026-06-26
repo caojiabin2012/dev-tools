@@ -272,16 +272,41 @@ pub async fn download_and_install_update(
         .map_err(|e| format!("保存安装包失败: {e}"))?;
 
     log::info!("Update installer saved to: {}", installer_path.display());
+    append_update_log(&format!(
+        "downloaded {} bytes to {}",
+        bytes.len(),
+        installer_path.display()
+    ));
 
     launch_installer(&installer_path, file_name)?;
 
     let app_handle = app.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    std::thread::spawn(move || {
+        // 等待安装器独立进程启动后再退出，避免子进程被一并终止
+        std::thread::sleep(std::time::Duration::from_millis(2000));
         app_handle.exit(0);
     });
 
     Ok("安装程序已启动，应用即将退出以完成更新".to_string())
+}
+
+fn append_update_log(message: &str) {
+    let log_path = AppSettings::path()
+        .parent()
+        .map(|p| p.join("update.log"))
+        .unwrap_or_else(|| std::path::PathBuf::from("update.log"));
+    let line = format!(
+        "[{}] {message}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+    );
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+    {
+        let _ = file.write_all(line.as_bytes());
+    }
 }
 
 #[cfg(windows)]
@@ -304,19 +329,29 @@ fn launch_installer(installer_path: &std::path::Path, file_name: &str) -> Result
         .to_str()
         .ok_or_else(|| "安装包路径无效".to_string())?;
 
-    if file_name.ends_with(".msi") {
-        std::process::Command::new("msiexec")
-            .args(["/i", path, "/passive", "/norestart"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| format!("启动安装器失败: {e}"))?;
+    // 用 Start-Process 脱离父进程；Tauri NSIS 更新推荐 /UPDATE /P /R（被动模式 + 安装后重启）
+    let ps_command = if file_name.ends_with(".msi") {
+        let path_escaped = path.replace('\'', "''");
+        format!(
+            "Start-Process -FilePath msiexec.exe -ArgumentList '/i','{path_escaped}','/passive','/norestart'"
+        )
     } else {
-        std::process::Command::new(path)
-            .arg("/S")
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| format!("启动安装器失败: {e}"))?;
-    }
+        format!("Start-Process -LiteralPath '{path_str}' -ArgumentList '/UPDATE','/P','/R'")
+    };
+
+    append_update_log(&format!("launch: {ps_command}"));
+
+    std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &ps_command,
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("启动安装器失败: {e}"))?;
 
     Ok(())
 }

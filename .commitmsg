@@ -1,0 +1,3 @@
+fix: 修复 Windows 自动更新安装流程 (v0.4.2)
+
+改用 NSIS /UPDATE /P /R 与 Start-Process 脱离父进程，避免应用退出后安装器被终止。
