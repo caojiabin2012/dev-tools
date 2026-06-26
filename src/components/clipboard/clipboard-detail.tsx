@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   getClipboardItemDetail,
   copyToClipboard,
   copyImageToClipboard,
   openFile,
   openFileContainingFolder,
-  ocrImage,
+  // ocrImage,
 } from '@/lib/clipboard-api';
-import type { ClipboardItemDetail, OcrRegion } from '@/lib/clipboard-api';
-import { ImageOcrOverlay } from './image-ocr-overlay';
+import type { ClipboardItemDetail } from '@/lib/clipboard-api';
+import { ClipboardImage } from './clipboard-image';
+// import { ImageOcrOverlay } from './image-ocr-overlay';
 
 interface ClipboardDetailProps {
   itemId: number | null;
@@ -23,44 +24,30 @@ function formatFileSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
-function imageToDataUrl(detail: ClipboardItemDetail): string | null {
-  if (!detail.content_image?.length) return null;
-  const binary = detail.content_image.reduce(
-    (data, byte) => data + String.fromCharCode(byte),
-    '',
-  );
-  return `data:${detail.mime_type || 'image/png'};base64,${btoa(binary)}`;
-}
-
 export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
   const [detail, setDetail] = useState<ClipboardItemDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState<'image' | 'text' | 'ocr' | null>(null);
-  const [ocrText, setOcrText] = useState<string | null>(null);
-  const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<'image' | 'text' | null>(null);
+  // OCR 文字识别与复制功能暂时关闭
+  // const [ocrText, setOcrText] = useState<string | null>(null);
+  // const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
+  // const [ocrLoading, setOcrLoading] = useState(false);
+  // const [ocrError, setOcrError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!itemId) {
       setDetail(null);
-      setOcrText(null);
-      setOcrRegions([]);
-      setOcrError(null);
-      setOcrLoading(false);
       return;
     }
 
     setLoading(true);
-    setOcrText(null);
-    setOcrRegions([]);
-    setOcrError(null);
     getClipboardItemDetail(itemId)
       .then(setDetail)
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [itemId]);
 
+  /*
   const runOcr = useCallback(async (imageData: number[]) => {
     setOcrLoading(true);
     setOcrError(null);
@@ -95,6 +82,7 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
     setCopied('ocr');
     setTimeout(() => setCopied(null), 2000);
   };
+  */
 
   const handleCopyText = async () => {
     if (!detail?.content_text) return;
@@ -136,7 +124,6 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
   const isText = detail?.content_type === 'text';
   const isImage = detail?.content_type === 'image';
   const isFile = detail?.content_type === 'file';
-  const imageBase64 = detail ? imageToDataUrl(detail) : null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
@@ -170,8 +157,9 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>{new Date(detail.created_at).toLocaleString('zh-CN')}</span>
                 <span>•</span>
-                <span>{isFile ? '文件' : isImage ? '图片' : '文本'}</span>
+                <span>{isFile ? '文件' : isImage ? (detail.mime_type === 'image/gif' ? 'GIF 动图' : '图片') : '文本'}</span>
                 {detail.is_pinned && <span>• 📌 已置顶</span>}
+                {/* OCR 重新识别暂时关闭
                 {isImage && detail.content_image && (
                   <>
                     <span>•</span>
@@ -184,6 +172,7 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
                     </button>
                   </>
                 )}
+                */}
               </div>
 
               {isText ? (
@@ -192,47 +181,20 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
                 </pre>
               ) : isImage ? (
                 <div className="flex flex-col items-center gap-3 w-full">
+                  <ClipboardImage
+                    itemId={detail.id}
+                    className="max-w-full max-h-[80vh] rounded-lg object-contain"
+                    alt="Clipboard image"
+                  />
+                  {/* OCR 文字选区与复制功能暂时关闭
                   {ocrLoading ? (
-                    <>
-                      {imageBase64 && (
-                        <img
-                          src={imageBase64}
-                          alt="Clipboard image"
-                          className="max-w-full max-h-[55vh] rounded-lg object-contain opacity-60"
-                        />
-                      )}
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
-                        正在识别文字...
-                      </div>
-                    </>
+                    ...
                   ) : ocrError ? (
-                    <>
-                      {imageBase64 && (
-                        <img
-                          src={imageBase64}
-                          alt="Clipboard image"
-                          className="max-w-full max-h-[55vh] rounded-lg object-contain"
-                        />
-                      )}
-                      <div className="w-full p-3 bg-destructive/10 rounded-lg text-sm text-destructive">
-                        {ocrError}
-                      </div>
-                    </>
+                    ...
                   ) : imageBase64 && ocrRegions.length > 0 ? (
-                    <ImageOcrOverlay
-                      src={imageBase64}
-                      alt="Clipboard image"
-                      regions={ocrRegions}
-                      onCopy={handleCopyOcrText}
-                    />
-                  ) : imageBase64 ? (
-                    <img
-                      src={imageBase64}
-                      alt="Clipboard image"
-                      className="max-w-full max-h-[55vh] rounded-lg object-contain"
-                    />
-                  ) : null}
+                    <ImageOcrOverlay ... />
+                  ) : ...
+                  */}
 
                   <span className="text-sm text-muted-foreground">
                     {detail.image_width}×{detail.image_height}
@@ -281,22 +243,12 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
             </button>
           )}
           {isImage && detail?.content_image && (
-            <>
-              {ocrText && (
-                <button
-                  onClick={() => handleCopyOcrText(ocrText)}
-                  className="px-4 py-2 text-sm border border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors"
-                >
-                  {copied === 'ocr' ? '已复制!' : '复制全部文字'}
-                </button>
-              )}
-              <button
-                onClick={handleCopyImage}
-                className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                {copied === 'image' ? '已复制!' : '复制图片'}
-              </button>
-            </>
+            <button
+              onClick={handleCopyImage}
+              className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              {copied === 'image' ? '已复制!' : '复制图片'}
+            </button>
           )}
           {isFile && detail?.file_path && (
             <>

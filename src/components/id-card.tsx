@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback } from 'react'
 import { searchRegions, type FlatRegion } from '@/lib/region-codes'
 import { generateIdCards, parseIdCard, type IdCardResult } from '@/lib/id-card'
+import { copyToClipboard } from '@/lib/clipboard-api'
+import { notify } from '@/lib/toast'
 
 type TabType = 'parse' | 'generate'
 
@@ -56,13 +58,23 @@ export function IdCardTool() {
     setParseResult(result)
   }, [parseInput])
 
-  const handleCopy = useCallback((text: string) => {
-    navigator.clipboard.writeText(text)
+  const handleCopy = useCallback(async (text: string, label = '身份证号') => {
+    try {
+      await copyToClipboard(text)
+      notify(`已复制${label}`)
+    } catch {
+      notify('复制失败')
+    }
   }, [])
 
-  const handleCopyAll = useCallback(() => {
-    const text = generated.map(r => r.id).join('\n')
-    navigator.clipboard.writeText(text)
+  const handleCopyAll = useCallback(async () => {
+    const text = generated.map((r) => r.id).join('\n')
+    try {
+      await copyToClipboard(text)
+      notify(`已复制全部 ${generated.length} 条`)
+    } catch {
+      notify('复制失败')
+    }
   }, [generated])
 
   return (

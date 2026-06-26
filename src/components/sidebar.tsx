@@ -53,10 +53,14 @@ export function Sidebar({
     <aside className="w-56 border-r border-border bg-card flex flex-col">
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-1">
-          <h1 className="text-lg font-semibold text-foreground flex items-center gap-2 flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => onSelect('home')}
+            className="text-lg font-semibold text-foreground flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity text-left"
+          >
             <span className="text-xl shrink-0">🧰</span>
             <span className="truncate">Tool Kit</span>
-          </h1>
+          </button>
           {hasUpdate && onUpdateClick && (
             <HeaderIconButton title="有新版本可用" onClick={onUpdateClick} highlight>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -76,6 +80,19 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto p-2">
+        <div className="mb-3">
+          <button
+            onClick={() => onSelect('home')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              activeTool === 'home'
+                ? 'bg-accent text-accent-foreground font-medium'
+                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+            }`}
+          >
+            <span className="font-mono text-base w-6 text-center">🏠</span>
+            首页
+          </button>
+        </div>
         {toolGroups.map((group) => (
           <div key={group.name} className="mb-3">
             <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">

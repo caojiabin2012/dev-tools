@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
-import { open } from '@tauri-apps/plugin-shell';
-import { getSettings, saveSettings, getAppVersion, updateShortcuts } from '@/lib/settings-api';
+import { getSettings, saveSettings, getAppVersion, updateShortcuts, downloadAndInstallUpdate } from '@/lib/settings-api';
 import type { AppSettings, UpdateInfo } from '@/lib/settings-api';
 import type { Theme } from '@/lib/use-theme';
 
@@ -50,6 +49,7 @@ export function Settings({
   const [settings, setSettings] = useState<AppSettings>({ auto_start: false, close_to_tray: true, shortcuts: {} });
   const [version, setVersion] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editingShortcut, setEditingShortcut] = useState<string | null>(null);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
@@ -143,10 +143,17 @@ export function Settings({
   const handleDownloadUpdate = async () => {
     if (!updateInfo?.download_url) return;
     setDownloading(true);
+    setDownloadProgress('正在下载更新...');
     try {
-      await open(updateInfo.download_url);
+      const result = await downloadAndInstallUpdate(updateInfo.download_url);
+      setDownloadProgress(result);
+      // 安装完成后提示用户重启
+      setTimeout(() => {
+        setDownloadProgress('安装完成，请重启应用');
+      }, 1000);
     } catch (error) {
-      console.error('Failed to open download URL:', error);
+      console.error('Failed to download update:', error);
+      setDownloadProgress('下载失败: ' + String(error));
     } finally {
       setDownloading(false);
     }
@@ -337,8 +344,11 @@ export function Settings({
                           disabled={!updateInfo.download_url || downloading}
                           className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50"
                         >
-                          {downloading ? '正在打开下载...' : '更新到最新版本'}
+                          {downloading ? '下载安装中...' : downloadProgress || '更新到最新版本'}
                         </button>
+                        {downloadProgress && !downloading && (
+                          <p className="text-xs text-muted-foreground mt-2">{downloadProgress}</p>
+                        )}
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">

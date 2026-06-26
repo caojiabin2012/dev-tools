@@ -6,14 +6,17 @@ import { Calculator } from '@/components/calculator'
 import { Calendar } from '@/components/calendar'
 import { IdCardTool } from '@/components/id-card'
 import { EncodingTool } from '@/components/encoding'
-import { GeneratorTool, ToastContainer } from '@/components/generator'
+import { GeneratorTool } from '@/components/generator'
+import { ToastContainer } from '@/lib/toast'
 import { DevTool } from '@/components/dev-tool'
 import { Settings, type SettingsTab } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
+import { Home } from '@/components/home'
 import { useTheme } from '@/lib/use-theme'
 import { useUpdate } from '@/lib/use-update'
 
 export type ToolId =
+  | 'home'
   | 'json-formatter' | 'clipboard' | 'calculator' | 'calendar'
   | 'id-card' | 'encoding' | 'generator' | 'dev-tool'
   | 'settings'
@@ -62,7 +65,7 @@ const toolGroups: ToolGroup[] = [
 const allTools = toolGroups.flatMap(g => g.tools)
 
 export default function App() {
-  const [activeTool, setActiveTool] = useState<ToolId>('json-formatter')
+  const [activeTool, setActiveTool] = useState<ToolId>('home')
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general')
   const [jsonFormatterInput, setJsonFormatterInput] = useState<string | undefined>()
   const { theme, setTheme } = useTheme()
@@ -102,6 +105,9 @@ export default function App() {
         onUpdateClick={() => openSettings('about')}
       />
       <main className="flex-1 overflow-hidden">
+        {activeTool === 'home' && (
+          <Home toolGroups={toolGroups} onSelect={setActiveTool} />
+        )}
         {activeTool === 'json-formatter' && (
           <JsonFormatter key={jsonFormatterInput ?? 'empty'} initialInput={jsonFormatterInput} />
         )}

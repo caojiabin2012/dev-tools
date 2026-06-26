@@ -1,4 +1,7 @@
 import { useState, useCallback } from 'react'
+import { copyToClipboard } from '@/lib/clipboard-api'
+import { formatDateTimeShanghai, parseDateTimeShanghai } from '@/lib/date-time'
+import { notify } from '@/lib/toast'
 
 type TabType = 'base64' | 'url' | 'timestamp'
 
@@ -235,7 +238,7 @@ function TimestampTool() {
     }
     setResult({
       timestamp: ts.toString(),
-      date: date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+      date: formatDateTimeShanghai(date),
     })
   }, [timestamp, unit])
 
@@ -245,28 +248,38 @@ function TimestampTool() {
       setError('请输入日期时间')
       return
     }
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) {
+    const date = parseDateTimeShanghai(dateStr)
+    if (!date) {
       setError('无效的日期格式，请使用 YYYY-MM-DD HH:mm:ss')
       return
     }
     const ts = unit === 's' ? Math.floor(date.getTime() / 1000) : date.getTime()
     setResult({
       timestamp: ts.toString(),
-      date: date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+      date: formatDateTimeShanghai(date),
     })
   }, [dateStr, unit])
 
   const handleNow = useCallback(() => {
     const nowTs = unit === 's' ? Math.floor(Date.now() / 1000) : Date.now()
-    setTimestamp(nowTs.toString())
     const date = new Date()
-    setDateStr(date.toISOString().slice(0, 19).replace('T', ' '))
+    const formatted = formatDateTimeShanghai(date)
+    setTimestamp(nowTs.toString())
+    setDateStr(formatted)
     setResult({
       timestamp: nowTs.toString(),
-      date: date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+      date: formatted,
     })
   }, [unit])
+
+  const handleCopy = useCallback(async (text: string, label: string) => {
+    try {
+      await copyToClipboard(text)
+      notify(`已复制${label}`)
+    } catch {
+      notify('复制失败')
+    }
+  }, [])
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -340,20 +353,26 @@ function TimestampTool() {
       {error && <div className="text-sm text-destructive">{error}</div>}
 
       {result && (
-        <div className="border border-border rounded-lg p-4 space-y-2">
-          <div className="text-sm">
-            <span className="text-muted-foreground">时间戳：</span>
+        <div className="border border-border rounded-lg p-4 space-y-3 bg-secondary/20">
+          <div className="text-sm flex items-center gap-2 flex-wrap">
+            <span className="text-muted-foreground shrink-0">时间戳：</span>
             <span className="font-mono">{result.timestamp}</span>
             <button
-              onClick={() => navigator.clipboard.writeText(result.timestamp)}
-              className="ml-2 text-xs text-primary hover:underline"
+              onClick={() => handleCopy(result.timestamp, '时间戳')}
+              className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
             >
               复制
             </button>
           </div>
-          <div className="text-sm">
-            <span className="text-muted-foreground">日期时间：</span>
-            <span>{result.date}</span>
+          <div className="text-sm flex items-center gap-2 flex-wrap">
+            <span className="text-muted-foreground shrink-0">日期时间：</span>
+            <span className="font-mono">{result.date}</span>
+            <button
+              onClick={() => handleCopy(result.date, '日期时间')}
+              className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+            >
+              复制
+            </button>
           </div>
         </div>
       )}

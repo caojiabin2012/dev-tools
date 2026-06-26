@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Tool Kit",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "identifier": "com.toolkit.app",
   "build": {
     "frontendDist": "../dist",
@@ -28,7 +28,11 @@
       "tooltip": "Tool Kit"
     },
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$LOCALDATA/tool-kit/**"]
+      }
     }
   },
   "plugins": {

@@ -1,6 +1,7 @@
 pub mod database;
 pub mod commands;
 pub mod monitor;
+pub mod image_io;
 
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicBool;

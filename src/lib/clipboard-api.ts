@@ -51,6 +51,10 @@ export async function getClipboardItemDetail(id: number): Promise<ClipboardItemD
   return invoke('get_clipboard_item_detail', { id });
 }
 
+export async function getClipboardImageDataUrl(id: number): Promise<string> {
+  return invoke('get_clipboard_image_data_url', { id });
+}
+
 export async function deleteClipboardItem(id: number): Promise<void> {
   return invoke('delete_clipboard_item', { id });
 }
@@ -98,4 +102,49 @@ export interface OcrResult {
 
 export async function ocrImage(imageData: number[]): Promise<OcrResult> {
   return invoke('ocr_image', { imageData });
+}
+
+/** 根据文件头识别图片 MIME */
+export function detectImageMimeType(bytes: number[] | Uint8Array): string {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  if (
+    data.length >= 6 &&
+    data[0] === 0x47 &&
+    data[1] === 0x49 &&
+    data[2] === 0x46 &&
+    data[3] === 0x38 &&
+    (data[4] === 0x37 || data[4] === 0x39) &&
+    data[5] === 0x61
+  ) {
+    return 'image/gif'
+  }
+  if (
+    data.length >= 8 &&
+    data[0] === 0x89 &&
+    data[1] === 0x50 &&
+    data[2] === 0x4e &&
+    data[3] === 0x47
+  ) {
+    return 'image/png'
+  }
+  if (data.length >= 2 && data[0] === 0xff && data[1] === 0xd8) {
+    return 'image/jpeg'
+  }
+  return 'image/png'
+}
+
+/** 将图片字节转为 Blob URL，比 base64 更高效且无损 */
+export function createImageObjectUrl(
+  bytes: number[] | Uint8Array,
+  mimeType?: string | null,
+): string {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  const detected = detectImageMimeType(data)
+  const type = detected === 'image/gif' ? 'image/gif' : (mimeType || detected)
+  const copy = Uint8Array.from(data)
+  return URL.createObjectURL(new Blob([copy], { type }))
+}
+
+export function revokeImageObjectUrl(url: string): void {
+  URL.revokeObjectURL(url);
 }

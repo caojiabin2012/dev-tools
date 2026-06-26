@@ -3,6 +3,10 @@ use tauri::State;
 use sha2::{Sha256, Digest};
 use crate::clipboard::database::{Database, ClipboardItemPreview, ClipboardItem};
 use crate::clipboard::{LAST_CLIPBOARD_HASH, SKIP_NEXT_IMAGE};
+use crate::clipboard::image_io::{
+    set_clipboard_gif, is_gif, image_mime_type,
+};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use std::sync::atomic::Ordering;
 use serde::{Deserialize, Serialize};
 
@@ -96,6 +100,19 @@ pub fn paste_from_clipboard() -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn get_clipboard_image_data_url(
+    state: State<'_, ClipboardDbState>,
+    id: i64,
+) -> Result<String, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let detail = db.get_item_detail(id).map_err(|e| e.to_string())?;
+    let detail = detail.ok_or("Item not found")?;
+    let data = detail.content_image.ok_or("No image data")?;
+    let mime = image_mime_type(&data, detail.mime_type.as_deref());
+    Ok(format!("data:{mime};base64,{}", STANDARD.encode(&data)))
+}
+
+#[tauri::command]
 pub fn copy_image_to_clipboard(state: State<'_, ClipboardDbState>, item_id: i64) -> Result<(), String> {
     SKIP_NEXT_IMAGE.store(true, Ordering::SeqCst);
 
@@ -103,9 +120,17 @@ pub fn copy_image_to_clipboard(state: State<'_, ClipboardDbState>, item_id: i64)
     let detail = db.get_item_detail(item_id).map_err(|e| e.to_string())?;
     let detail = detail.ok_or("Item not found")?;
     let image_data = detail.content_image.ok_or("No image data")?;
+    let mime_type = detail.mime_type.as_deref().unwrap_or("image/png");
+    drop(db);
+
+    if mime_type == "image/gif" || is_gif(&image_data) {
+        let hash = hash_bytes(&image_data);
+        *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
+        return set_clipboard_gif(&image_data);
+    }
+
     let width = detail.image_width.ok_or("No width")? as u32;
     let height = detail.image_height.ok_or("No height")? as u32;
-    drop(db);
 
     let img = image::load_from_memory(&image_data).map_err(|e| e.to_string())?;
     let rgba = img.to_rgba8();

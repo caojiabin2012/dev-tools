@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { formatDateTimeShanghai } from '@/lib/date-time'
 
 type TabType = 'regex' | 'cron'
 
@@ -211,26 +212,105 @@ function RegexTool() {
   )
 }
 
+interface CronParts {
+  minute: string
+  hour: string
+  dayOfMonth: string
+  month: string
+  dayOfWeek: string
+}
+
+function parseCronExpression(expression: string): { parts: CronParts | null; error: string } {
+  const trimmed = expression.trim()
+  if (!trimmed) return { parts: null, error: '' }
+  const segments = trimmed.split(/\s+/)
+  if (segments.length !== 5) {
+    return { parts: null, error: 'Cron 表达式需要 5 个部分：分 时 日 月 周' }
+  }
+  return {
+    parts: {
+      minute: segments[0],
+      hour: segments[1],
+      dayOfMonth: segments[2],
+      month: segments[3],
+      dayOfWeek: segments[4],
+    },
+    error: '',
+  }
+}
+
+function matchCronField(field: string, value: number): boolean {
+  if (field === '*') return true
+
+  if (field.includes('/')) {
+    const [base, stepStr] = field.split('/')
+    const step = parseInt(stepStr, 10)
+    if (Number.isNaN(step) || step <= 0) return false
+    if (base === '*') return value % step === 0
+    const start = parseInt(base, 10)
+    if (Number.isNaN(start)) return false
+    return value >= start && (value - start) % step === 0
+  }
+
+  if (field.includes(',')) {
+    return field.split(',').some((item) => matchCronField(item.trim(), value))
+  }
+
+  if (field.includes('-')) {
+    const [startStr, endStr] = field.split('-')
+    const start = parseInt(startStr, 10)
+    const end = parseInt(endStr, 10)
+    if (Number.isNaN(start) || Number.isNaN(end)) return false
+    return value >= start && value <= end
+  }
+
+  const num = parseInt(field, 10)
+  return !Number.isNaN(num) && num === value
+}
+
+function matchesCronDate(parts: CronParts, date: Date): boolean {
+  const minute = date.getMinutes()
+  const hour = date.getHours()
+  const day = date.getDate()
+  const month = date.getMonth() + 1
+  const weekday = date.getDay()
+
+  if (!matchCronField(parts.minute, minute)) return false
+  if (!matchCronField(parts.hour, hour)) return false
+  if (!matchCronField(parts.month, month)) return false
+
+  const domMatch = matchCronField(parts.dayOfMonth, day)
+  const dowMatch = matchCronField(parts.dayOfWeek, weekday)
+  const domAll = parts.dayOfMonth === '*'
+  const dowAll = parts.dayOfWeek === '*'
+
+  if (!domAll && !dowAll) return domMatch || dowMatch
+  return domMatch && dowMatch
+}
+
+function getNextCronRuns(parts: CronParts, count: number): Date[] {
+  const runs: Date[] = []
+  const cursor = new Date()
+  cursor.setSeconds(0, 0)
+  cursor.setMinutes(cursor.getMinutes() + 1)
+
+  const maxMinutes = 366 * 24 * 60
+  for (let i = 0; i < maxMinutes && runs.length < count; i++) {
+    const checkDate = new Date(cursor.getTime() + i * 60000)
+    if (matchesCronDate(parts, checkDate)) {
+      runs.push(checkDate)
+    }
+  }
+  return runs
+}
+
 function CronTool() {
   const [expression, setExpression] = useState('')
-  const [error, setError] = useState('')
 
-  const cronParts = useMemo(() => {
-    if (!expression.trim()) return null
-    const parts = expression.trim().split(/\s+/)
-    if (parts.length !== 5) {
-      setError('Cron 表达式需要 5 个部分：分 时 日 月 周')
-      return null
-    }
-    setError('')
-    return {
-      minute: parts[0],
-      hour: parts[1],
-      dayOfMonth: parts[2],
-      month: parts[3],
-      dayOfWeek: parts[4],
-    }
-  }, [expression])
+  const { parts: cronParts, error } = useMemo(
+    () => parseCronExpression(expression),
+    [expression],
+  )
 
   const description = useMemo(() => {
     if (!cronParts) return ''
@@ -295,46 +375,8 @@ function CronTool() {
 
   const nextRuns = useMemo(() => {
     if (!cronParts) return []
-    const now = new Date()
-    const runs: Date[] = []
-    const maxRuns = 10
-
-    for (let i = 0; i < 365 * 24 && runs.length < maxRuns; i++) {
-      const checkDate = new Date(now.getTime() + i * 60000)
-      const minute = checkDate.getMinutes()
-      const hour = checkDate.getHours()
-      const day = checkDate.getDate()
-      const month = checkDate.getMonth() + 1
-      const weekday = checkDate.getDay()
-
-      if (
-        matchCronField(cronParts.minute, minute) &&
-        matchCronField(cronParts.hour, hour) &&
-        matchCronField(cronParts.dayOfMonth, day) &&
-        matchCronField(cronParts.month, month) &&
-        matchCronField(cronParts.dayOfWeek, weekday)
-      ) {
-        runs.push(checkDate)
-      }
-    }
-    return runs
+    return getNextCronRuns(cronParts, 10)
   }, [cronParts])
-
-  const matchCronField = (field: string, value: number): boolean => {
-    if (field === '*') return true
-    if (field.includes('/')) {
-      const [, interval] = field.split('/')
-      return value % parseInt(interval) === 0
-    }
-    if (field.includes('-')) {
-      const [start, end] = field.split('-').map(Number)
-      return value >= start && value <= end
-    }
-    if (field.includes(',')) {
-      return field.split(',').map(Number).includes(value)
-    }
-    return parseInt(field) === value
-  }
 
   const presets = [
     { label: '每分钟', value: '* * * * *' },
@@ -431,7 +473,7 @@ function CronTool() {
                   <tr key={i} className="border-t border-border">
                     <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
                     <td className="px-3 py-2 font-mono text-xs">
-                      {run.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}
+                      {formatDateTimeShanghai(run)}
                     </td>
                     <td className="px-3 py-2 text-xs">
                       {['周日', '周一', '周二', '周三', '周四', '周五', '周六'][run.getDay()]}

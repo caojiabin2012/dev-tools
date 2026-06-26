@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { ClipboardItemPreview } from '@/lib/clipboard-api';
+import { ClipboardImage } from './clipboard-image';
 import { detectJsonText } from '@/lib/json-detect';
 
 interface ClipboardItemProps {
@@ -115,7 +116,7 @@ export function ClipboardItemComponent({
               <span className="text-xs text-yellow-500">📌</span>
             )}
             <span className={`text-xs px-1.5 py-0.5 rounded ${typeColor}`}>
-              {jsonInfo ? 'JSON' : typeLabel}
+              {jsonInfo ? 'JSON' : item.mime_type === 'image/gif' ? 'GIF' : typeLabel}
             </span>
             {jsonInfo?.isStringWrapped && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300">
@@ -146,7 +147,7 @@ export function ClipboardItemComponent({
             >
               <div className="w-16 h-16 rounded bg-muted flex items-center justify-center overflow-hidden ring-1 ring-border hover:ring-blue-500 transition-all">
                 {item.has_image ? (
-                  <ImageThumbnail itemId={item.id} />
+                  <ClipboardImage itemId={item.id} className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-2xl">🖼️</span>
                 )}
@@ -224,56 +225,4 @@ export function ClipboardItemComponent({
       </div>
     </div>
   );
-}
-
-function ImageThumbnail({ itemId }: { itemId: number }) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    import('@/lib/clipboard-api').then(({ getClipboardItemDetail }) => {
-      getClipboardItemDetail(itemId).then((detail) => {
-        if (cancelled) return;
-        
-        if (!detail) {
-          setError('Failed to load detail');
-          return;
-        }
-        
-        if (!detail.content_image || detail.content_image.length === 0) {
-          setError('No image data');
-          return;
-        }
-        
-        try {
-          const uint8Array = new Uint8Array(detail.content_image);
-          let binary = '';
-          for (let i = 0; i < uint8Array.length; i++) {
-            binary += String.fromCharCode(uint8Array[i]);
-          }
-          const base64 = btoa(binary);
-          setSrc(`data:${detail.mime_type || 'image/png'};base64,${base64}`);
-        } catch (e) {
-          setError('Failed to convert image');
-          console.error('ImageThumbnail conversion error:', e);
-        }
-      }).catch((e) => {
-        if (!cancelled) {
-          setError('Failed to fetch detail');
-          console.error('ImageThumbnail fetch error:', e);
-        }
-      });
-    });
-    return () => { cancelled = true; };
-  }, [itemId]);
-
-  if (error) {
-    console.warn(`ImageThumbnail error for item ${itemId}:`, error);
-    return <span className="text-2xl">🖼️</span>;
-  }
-
-  if (!src) return <span className="text-2xl">🖼️</span>;
-
-  return <img src={src} alt="" className="w-full h-full object-cover" />;
 }

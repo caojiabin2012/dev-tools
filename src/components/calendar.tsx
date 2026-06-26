@@ -168,8 +168,13 @@ export function Calendar() {
 
         {/* 星期标题 */}
         <div className="grid grid-cols-7 gap-1 mb-1">
-          {WEEKDAYS.map((day) => (
-            <div key={day} className="text-center text-sm text-muted-foreground py-2">
+          {WEEKDAYS.map((day, index) => (
+            <div
+              key={day}
+              className={`text-center text-sm py-2 ${
+                index >= 5 ? 'text-primary/80 font-medium' : 'text-muted-foreground'
+              }`}
+            >
               {day}
             </div>
           ))}
@@ -178,8 +183,9 @@ export function Calendar() {
         {/* 日历网格 */}
         <div className="grid grid-cols-7 gap-1 flex-1">
           {calendar.map((day, index) => {
-            const dateStr = formatDate(day.date)
+            const dateStr = formatDate(date)
             const isSelected = dateStr === formatDate(selectedDate)
+            const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6
 
             return (
               <button
@@ -187,34 +193,50 @@ export function Calendar() {
                 onClick={() => setSelectedDate(day.date)}
                 className={`
                   relative flex flex-col items-center p-2 rounded-lg transition-all
-                  ${day.isCurrentMonth ? '' : 'text-muted-foreground opacity-50'}
-                  ${day.isToday ? 'bg-blue-500 text-white font-bold' : ''}
-                  ${isSelected && !day.isToday ? 'bg-secondary' : ''}
-                  ${!day.isToday ? 'hover:bg-secondary/80' : ''}
+                  ${day.isCurrentMonth ? '' : 'text-muted-foreground/60'}
+                  ${day.isToday
+                    ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                    : isSelected
+                      ? 'bg-primary/10 text-primary ring-1 ring-primary/40 font-medium'
+                      : isWeekend && day.isCurrentMonth
+                        ? 'text-foreground/90 hover:bg-accent/60'
+                        : 'hover:bg-accent/50'}
                 `}
               >
                 <span className="text-sm">{day.date.getDate()}</span>
                 {day.festivals && day.festivals.length > 0 ? (
-                  <span className="text-[10px] text-blue-500 dark:text-blue-400 leading-none">
+                  <span className={`text-[10px] leading-none font-medium ${
+                    day.isToday ? 'text-primary-foreground/90' : 'text-primary'
+                  }`}>
                     {day.festivals[0]}
                   </span>
                 ) : day.term ? (
-                  <span className="text-[10px] text-green-600 dark:text-green-400 leading-none">
+                  <span className={`text-[10px] leading-none ${
+                    day.isToday ? 'text-primary-foreground/80' : 'text-emerald-600 dark:text-emerald-400'
+                  }`}>
                     {day.term}
                   </span>
                 ) : day.lunar.day === 1 ? (
-                  <span className="text-[10px] text-muted-foreground leading-none">
+                  <span className={`text-[10px] leading-none ${
+                    day.isToday ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                  }`}>
                     {day.lunar.monthName}
                   </span>
                 ) : (
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 leading-none">
+                  <span className={`text-[10px] leading-none ${
+                    day.isToday ? 'text-primary-foreground/70' : 'text-muted-foreground/80'
+                  }`}>
                     {day.lunar.dayName}
                   </span>
                 )}
                 {(memoDates.has(dateStr) || reminderDates.has(dateStr)) && (
                   <div className="absolute bottom-1 flex gap-0.5">
-                    {memoDates.has(dateStr) && <div className="w-1 h-1 rounded-full bg-blue-500" />}
-                    {reminderDates.has(dateStr) && <div className="w-1 h-1 rounded-full bg-orange-500" />}
+                    {memoDates.has(dateStr) && (
+                      <div className={`w-1 h-1 rounded-full ${day.isToday ? 'bg-primary-foreground' : 'bg-primary'}`} />
+                    )}
+                    {reminderDates.has(dateStr) && (
+                      <div className={`w-1 h-1 rounded-full ${day.isToday ? 'bg-amber-200' : 'bg-amber-500'}`} />
+                    )}
                   </div>
                 )}
               </button>
@@ -272,12 +294,12 @@ export function Calendar() {
               {/* 宜忌 */}
               <div>
                 <div className="text-sm font-medium mb-2 flex items-center gap-2">
-                  <span className="text-green-600 dark:text-green-400">宜</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">宜</span>
                   <span className="text-xs text-muted-foreground">({huangLi.zhiShen}日)</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {huangLi.yi.map((item) => (
-                    <span key={item} className="px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded">
+                    <span key={item} className="px-2 py-1 text-xs rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
                       {item}
                     </span>
                   ))}
@@ -288,7 +310,7 @@ export function Calendar() {
                 <div className="text-sm font-medium mb-2 text-red-600 dark:text-red-400">忌</div>
                 <div className="flex flex-wrap gap-1">
                   {huangLi.ji.map((item) => (
-                    <span key={item} className="px-2 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 rounded">
+                    <span key={item} className="px-2 py-1 text-xs rounded border border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300">
                       {item}
                     </span>
                   ))}
@@ -310,7 +332,7 @@ export function Calendar() {
                   <div className="text-xs font-medium mb-1">吉神</div>
                   <div className="flex flex-wrap gap-1">
                     {huangLi.jiShen.map((s) => (
-                      <span key={s} className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded">
+                      <span key={s} className="px-2 py-0.5 text-xs rounded border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                         {s}
                       </span>
                     ))}
@@ -323,7 +345,7 @@ export function Calendar() {
                   <div className="text-xs font-medium mb-1">凶煞</div>
                   <div className="flex flex-wrap gap-1">
                     {huangLi.xiongSha.map((s) => (
-                      <span key={s} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400 rounded">
+                      <span key={s} className="px-2 py-0.5 text-xs rounded border border-border bg-muted/50 text-muted-foreground">
                         {s}
                       </span>
                     ))}
@@ -497,7 +519,7 @@ export function Calendar() {
                       <div className="flex items-start justify-between">
                         <div>
                           <div className="font-medium text-sm flex items-center gap-2">
-                            <span className="text-orange-500">{reminder.time}</span>
+                            <span className="text-amber-600 dark:text-amber-400 font-medium">{reminder.time}</span>
                             {reminder.title}
                           </div>
                           {reminder.content && (
