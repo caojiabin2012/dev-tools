@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { checkForUpdate } from '@/lib/settings-api';
-import type { UpdateInfo } from '@/lib/settings-api';
+import { checkForUpdate, type UpdateInfo } from '@/lib/updater';
 
 let startupCheckStarted = false;
 
@@ -15,12 +14,18 @@ export function useUpdate() {
     setChecking(true);
     setUpdateError(null);
     try {
-      const info = await checkForUpdate();
-      if (mountedRef.current) {
-        setUpdateInfo(info);
+      const result = await checkForUpdate({ timeout: 30000 });
+      if (!mountedRef.current) return null;
+
+      if (result.status === 'available') {
+        setUpdateInfo(result.info);
         setChecked(true);
+        return result.info;
       }
-      return info;
+
+      setUpdateInfo(null);
+      setChecked(true);
+      return null;
     } catch (error) {
       if (mountedRef.current) {
         setUpdateInfo(null);

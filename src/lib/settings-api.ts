@@ -6,13 +6,6 @@ export interface AppSettings {
   shortcuts: Record<string, string>;
 }
 
-export interface UpdateInfo {
-  current_version: string;
-  latest_version: string;
-  download_url: string | null;
-  release_notes: string | null;
-}
-
 export async function getSettings(): Promise<AppSettings> {
   return invoke('get_settings');
 }
@@ -35,10 +28,6 @@ export async function getAppVersion(): Promise<string> {
   return invoke('get_app_version');
 }
 
-export async function checkForUpdate(): Promise<UpdateInfo | null> {
-  return invoke('check_for_update');
-}
-
-export async function downloadAndInstallUpdate(downloadUrl: string): Promise<string> {
-  return invoke('download_and_install_update', { downloadUrl });
+export async function installUpdateAndRestart(): Promise<boolean> {
+  return invoke('install_update_and_restart');
 }

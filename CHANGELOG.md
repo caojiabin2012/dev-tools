@@ -1,5 +1,15 @@
 # Tool Kit 更新日志
 
+## 2026-06-26 更新（v0.4.3）
+
+### 自动更新重构 ⬆️
+
+- 改用 `tauri-plugin-updater` 官方更新流程（对齐 cc-switch）
+- Windows 安装前移除托盘图标，修复安装器无法启动
+- CI 发布 MSI / tar.gz updater 产物，`latest.json` 动态生成
+
+---
+
 ## 2026-06-26 更新（v0.4.2）
 
 ### 自动更新安装修复 ⬆️

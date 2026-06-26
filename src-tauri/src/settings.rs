@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use tauri::Emitter;
 
 pub struct SettingsState {
     pub settings: Arc<Mutex<AppSettings>>,
@@ -145,247 +146,79 @@ pub fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-const GITHUB_REPO: &str = "caojiabin2012/tool-kit";
+const TRAY_ID: &str = "main";
 
-fn is_newer_version(latest: &str, current: &str) -> bool {
-    let parse = |v: &str| -> Vec<u32> {
-        v.split('.')
-            .filter_map(|part| part.parse().ok())
-            .collect()
-    };
-    let latest_parts = parse(latest);
-    let current_parts = parse(current);
-    let len = latest_parts.len().max(current_parts.len());
-
-    for i in 0..len {
-        let latest_part = *latest_parts.get(i).unwrap_or(&0);
-        let current_part = *current_parts.get(i).unwrap_or(&0);
-        if latest_part > current_part {
-            return true;
-        }
-        if latest_part < current_part {
-            return false;
+fn remove_tray_icon_before_exit(app: &tauri::AppHandle) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        if let Err(e) = tray.set_visible(false) {
+            log::warn!("退出时移除托盘图标失败: {e}");
         }
     }
-
-    false
 }
 
-fn pick_download_url(assets: &[GitHubAsset]) -> Option<String> {
-    let preferred_suffixes: &[&str] = if cfg!(target_os = "windows") {
-        &["-setup.exe", ".msi"]
-    } else if cfg!(target_os = "macos") {
-        &[".dmg"]
-    } else if cfg!(target_os = "linux") {
-        &[".AppImage", ".deb"]
-    } else {
-        &["-setup.exe", ".msi", ".dmg", ".AppImage", ".deb"]
-    };
-
-    for suffix in preferred_suffixes {
-        if let Some(asset) = assets.iter().find(|a| a.name.ends_with(suffix)) {
-            return Some(asset.browser_download_url.clone());
-        }
-    }
-
-    assets.first().map(|a| a.browser_download_url.clone())
+#[derive(Serialize, Clone)]
+pub struct UpdateDownloadProgress {
+    pub downloaded: u64,
+    pub total: Option<u64>,
 }
 
 #[tauri::command]
-pub async fn check_for_update() -> Result<Option<UpdateInfo>, String> {
-    let url = format!("https://api.github.com/repos/{GITHUB_REPO}/releases/latest");
-    let client = reqwest::Client::new();
-    let resp = client
-        .get(url)
-        .header("User-Agent", "tool-kit-app")
-        .header("Accept", "application/vnd.github+json")
-        .send()
+pub async fn install_update_and_restart(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let updater = app
+        .updater_builder()
+        .build()
+        .map_err(|e| format!("初始化更新器失败: {e}"))?;
+
+    let Some(update) = updater
+        .check()
         .await
-        .map_err(|e| format!("无法连接更新服务器: {e}"))?;
+        .map_err(|e| format!("检查更新失败: {e}"))?
+    else {
+        return Ok(false);
+    };
 
-    if !resp.status().is_success() {
-        return Err(format!("检查更新失败 (HTTP {})", resp.status()));
-    }
-
-    let release: GitHubRelease = resp
-        .json()
-        .await
-        .map_err(|e| format!("解析更新信息失败: {e}"))?;
-    let current = env!("CARGO_PKG_VERSION").to_string();
-    let latest = release.tag_name.trim_start_matches('v').to_string();
-
-    if is_newer_version(&latest, &current) {
-        Ok(Some(UpdateInfo {
-            current_version: current,
-            latest_version: latest,
-            download_url: pick_download_url(&release.assets),
-            release_notes: release.body,
-        }))
-    } else {
-        Ok(None)
-    }
-}
-
-#[derive(Deserialize)]
-struct GitHubRelease {
-    tag_name: String,
-    body: Option<String>,
-    assets: Vec<GitHubAsset>,
-}
-
-#[derive(Deserialize)]
-struct GitHubAsset {
-    name: String,
-    browser_download_url: String,
-}
-
-#[tauri::command]
-pub async fn download_and_install_update(
-    app: tauri::AppHandle,
-    download_url: String,
-) -> Result<String, String> {
-    let temp_dir = std::env::temp_dir();
-    let file_name = download_url
-        .rsplit('/')
-        .next()
-        .unwrap_or("update.exe");
-    let installer_path = temp_dir.join(file_name);
-
-    let client = reqwest::Client::new();
-    let resp = client
-        .get(&download_url)
-        .header("User-Agent", "tool-kit-app")
-        .send()
-        .await
-        .map_err(|e| format!("下载失败: {e}"))?;
-
-    if !resp.status().is_success() {
-        return Err(format!("下载失败: {}", resp.status()));
-    }
-
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("读取下载数据失败: {e}"))?;
-
-    std::fs::write(&installer_path, &bytes)
-        .map_err(|e| format!("保存安装包失败: {e}"))?;
-
-    log::info!("Update installer saved to: {}", installer_path.display());
-    append_update_log(&format!(
-        "downloaded {} bytes to {}",
-        bytes.len(),
-        installer_path.display()
-    ));
-
-    launch_installer(&installer_path, file_name)?;
-
-    let app_handle = app.clone();
-    std::thread::spawn(move || {
-        // 等待安装器独立进程启动后再退出，避免子进程被一并终止
-        std::thread::sleep(std::time::Duration::from_millis(2000));
-        app_handle.exit(0);
-    });
-
-    Ok("安装程序已启动，应用即将退出以完成更新".to_string())
-}
-
-fn append_update_log(message: &str) {
-    let log_path = AppSettings::path()
-        .parent()
-        .map(|p| p.join("update.log"))
-        .unwrap_or_else(|| std::path::PathBuf::from("update.log"));
-    let line = format!(
-        "[{}] {message}\n",
-        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
-    );
-    use std::io::Write;
-    if let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_path)
-    {
-        let _ = file.write_all(line.as_bytes());
-    }
-}
-
-#[cfg(windows)]
-fn launch_installer(installer_path: &std::path::Path, file_name: &str) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    let path_str = installer_path.to_string_lossy().replace('\'', "''");
-    let _ = std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            &format!("Unblock-File -LiteralPath '{path_str}'"),
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status();
-
-    let path = installer_path
-        .to_str()
-        .ok_or_else(|| "安装包路径无效".to_string())?;
-
-    // 用 Start-Process 脱离父进程；Tauri NSIS 更新推荐 /UPDATE /P /R（被动模式 + 安装后重启）
-    let ps_command = if file_name.ends_with(".msi") {
-        let path_escaped = path.replace('\'', "''");
-        format!(
-            "Start-Process -FilePath msiexec.exe -ArgumentList '/i','{path_escaped}','/passive','/norestart'"
+    log::info!("开始下载应用更新: {}", update.version);
+    let progress_handle = app.clone();
+    let mut downloaded: u64 = 0;
+    let bytes = update
+        .download(
+            move |chunk_len, content_len| {
+                downloaded = downloaded.saturating_add(chunk_len as u64);
+                let _ = progress_handle.emit(
+                    "update-download-progress",
+                    UpdateDownloadProgress {
+                        downloaded,
+                        total: content_len,
+                    },
+                );
+            },
+            || {},
         )
-    } else {
-        format!("Start-Process -LiteralPath '{path_str}' -ArgumentList '/UPDATE','/P','/R'")
-    };
+        .await
+        .map_err(|e| format!("下载更新失败: {e}"))?;
 
-    append_update_log(&format!("launch: {ps_command}"));
+    log::info!("开始安装应用更新: {}", update.version);
 
-    std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            &ps_command,
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn()
-        .map_err(|e| format!("启动安装器失败: {e}"))?;
+    #[cfg(target_os = "windows")]
+    {
+        remove_tray_icon_before_exit(&app);
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        update
+            .install(bytes)
+            .map_err(|e| format!("Windows 更新安装失败: {e}"))?;
+        return Ok(true);
+    }
 
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn launch_installer(installer_path: &std::path::Path, _file_name: &str) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt;
-
-    let mut perms = std::fs::metadata(installer_path)
-        .map_err(|e| format!("读取安装包权限失败: {e}"))?
-        .permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(installer_path, perms)
-        .map_err(|e| format!("设置安装包权限失败: {e}"))?;
-
-    std::process::Command::new(installer_path)
-        .spawn()
-        .map_err(|e| format!("启动安装器失败: {e}"))?;
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn launch_installer(installer_path: &std::path::Path, _file_name: &str) -> Result<(), String> {
-    std::process::Command::new("open")
-        .arg(installer_path)
-        .spawn()
-        .map_err(|e| format!("启动安装器失败: {e}"))?;
-    Ok(())
-}
-
-#[derive(Serialize)]
-pub struct UpdateInfo {
-    pub current_version: String,
-    pub latest_version: String,
-    pub download_url: Option<String>,
-    pub release_notes: Option<String>,
+    #[cfg(not(target_os = "windows"))]
+    {
+        update
+            .install(bytes)
+            .map_err(|e| format!("安装更新失败: {e}"))?;
+        remove_tray_icon_before_exit(&app);
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        app.restart();
+        Ok(true)
+    }
 }

@@ -105,6 +105,7 @@ jobs:
           name: macos-installer
           path: |
             src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.tar.gz
 
   release:
     needs: [build-windows, build-linux, build-macos]
@@ -125,32 +126,66 @@ jobs:
 
       - name: Generate latest.json
         run: |
+          set -euo pipefail
           VERSION="${{ steps.version.outputs.VERSION }}"
           REPO="${{ github.repository }}"
           TAG="v${VERSION}"
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 
-          cat > latest.json << EOF
-          {
-            "version": "v${VERSION}",
-            "notes": "See https://github.com/${REPO}/releases/tag/${TAG} for details.",
-            "pub_key": "",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "",
-                "url": "https://github.com/${REPO}/releases/download/${TAG}/Tool.Kit_${VERSION}_x64-setup.exe"
-              },
-              "linux-x86_64": {
-                "signature": "",
-                "url": "https://github.com/${REPO}/releases/download/${TAG}/Tool.Kit_${VERSION}_amd64.AppImage"
-              },
-              "darwin-aarch64": {
-                "signature": "",
-                "url": "https://github.com/${REPO}/releases/download/${TAG}/Tool.Kit_${VERSION}_aarch64.dmg"
-              }
-            }
+          find_msi() {
+            find artifacts/windows-installer -name "*.msi" -type f 2>/dev/null | head -1
           }
-          EOF
+          find_appimage() {
+            find artifacts/linux-installer -name "*.AppImage" -type f 2>/dev/null | head -1
+          }
+          find_mac_tar() {
+            find artifacts/macos-installer -name "*.tar.gz" -type f 2>/dev/null | head -1
+          }
 
+          WIN_MSI=$(find_msi)
+          LINUX_APPIMAGE=$(find_appimage)
+          MAC_TAR=$(find_mac_tar)
+
+          win_url=""; linux_url=""; mac_url=""
+          if [ -n "$WIN_MSI" ]; then
+            win_url="${BASE_URL}/$(basename "$WIN_MSI")"
+          fi
+          if [ -n "$LINUX_APPIMAGE" ]; then
+            linux_url="${BASE_URL}/$(basename "$LINUX_APPIMAGE")"
+          fi
+          if [ -n "$MAC_TAR" ]; then
+            mac_url="${BASE_URL}/$(basename "$MAC_TAR")"
+          fi
+
+          tmp_json=$(mktemp)
+          {
+            echo '{'
+            echo "  \"version\": \"${VERSION}\","
+            echo "  \"notes\": \"See https://github.com/${REPO}/releases/tag/${TAG} for details.\","
+            echo "  \"pub_date\": \"${PUB_DATE}\","
+            echo '  "platforms": {'
+            first=1
+            if [ -n "$win_url" ]; then
+              echo "    \"windows-x86_64\": {\"signature\": \"\", \"url\": \"${win_url}\"}"
+              first=0
+            fi
+            if [ -n "$linux_url" ]; then
+              [ $first -eq 0 ] && echo ','
+              echo "    \"linux-x86_64\": {\"signature\": \"\", \"url\": \"${linux_url}\"}"
+              first=0
+            fi
+            if [ -n "$mac_url" ]; then
+              [ $first -eq 0 ] && echo ','
+              echo "    \"darwin-aarch64\": {\"signature\": \"\", \"url\": \"${mac_url}\"}"
+              echo ','
+              echo "    \"darwin-x86_64\": {\"signature\": \"\", \"url\": \"${mac_url}\"}"
+            fi
+            echo '  }'
+            echo '}'
+          } > "$tmp_json"
+
+          mv "$tmp_json" latest.json
           cat latest.json
 
       - name: Create Release
@@ -163,6 +198,7 @@ jobs:
             artifacts/linux-installer/**/*.deb
             artifacts/linux-installer/**/*.AppImage
             artifacts/macos-installer/**/*.dmg
+            artifacts/macos-installer/**/*.tar.gz
             latest.json
           draft: false
           prerelease: false

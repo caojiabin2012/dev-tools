@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getAppVersion, checkForUpdate, downloadAndInstallUpdate } from '@/lib/settings-api';
-import type { UpdateInfo } from '@/lib/settings-api';
+import { getAppVersion, installUpdateAndRestart } from '@/lib/settings-api';
+import { checkForUpdate, type UpdateInfo } from '@/lib/updater';
 
 export function About() {
   const [version, setVersion] = useState('');
@@ -19,8 +19,12 @@ export function About() {
     setChecking(true);
     setUpdateError(null);
     try {
-      const info = await checkForUpdate();
-      setUpdateInfo(info);
+      const result = await checkForUpdate({ timeout: 30000 });
+      if (result.status === 'available') {
+        setUpdateInfo(result.info);
+      } else {
+        setUpdateInfo(null);
+      }
       setChecked(true);
     } catch (error) {
       console.error('Failed to check update:', error);
@@ -31,15 +35,19 @@ export function About() {
   };
 
   const handleDownload = async () => {
-    if (!updateInfo?.download_url) return;
+    if (!updateInfo) return;
     setDownloading(true);
     setDownloadProgress('正在下载更新...');
     setUpdateError(null);
     try {
-      const result = await downloadAndInstallUpdate(updateInfo.download_url);
-      setDownloadProgress(result);
+      const installed = await installUpdateAndRestart();
+      if (!installed) {
+        setDownloadProgress('已是最新版本');
+      } else {
+        setDownloadProgress('正在安装，应用即将退出...');
+      }
     } catch (error) {
-      console.error('Failed to download update:', error);
+      console.error('Failed to install update:', error);
       setUpdateError(String(error));
       setDownloadProgress('');
     } finally {
@@ -74,16 +82,16 @@ export function About() {
                 <div className="flex items-center gap-2">
                   <span className="text-green-500">●</span>
                   <span className="text-sm font-medium text-foreground">
-                    发现新版本 v{updateInfo.latest_version}
+                    发现新版本 v{updateInfo.availableVersion}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  当前版本: v{updateInfo.current_version} → 新版本: v{updateInfo.latest_version}
+                  当前版本: v{updateInfo.currentVersion} → 新版本: v{updateInfo.availableVersion}
                 </p>
-                {updateInfo.release_notes && (
+                {updateInfo.notes && (
                   <div className="text-xs text-muted-foreground max-h-32 overflow-auto">
                     <p className="font-medium mb-1">更新内容:</p>
-                    <pre className="whitespace-pre-wrap">{updateInfo.release_notes}</pre>
+                    <pre className="whitespace-pre-wrap">{updateInfo.notes}</pre>
                   </div>
                 )}
                 {downloadProgress && (

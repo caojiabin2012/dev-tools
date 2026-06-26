@@ -150,8 +150,7 @@ pub fn run() {
             settings::get_settings,
             settings::save_settings,
             settings::get_app_version,
-            settings::check_for_update,
-            settings::download_and_install_update,
+            settings::install_update_and_restart,
             settings::update_shortcuts,
         ])
         .setup(move |app| {
