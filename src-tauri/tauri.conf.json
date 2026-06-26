@@ -39,8 +39,7 @@
     "updater": {
       "endpoints": [
         "https://github.com/caojiabin2012/tool-kit/releases/latest/download/latest.json"
-      ],
-      "pubkey": ""
+      ]
     }
   },
   "bundle": {
