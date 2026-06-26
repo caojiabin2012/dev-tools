@@ -3,6 +3,9 @@ import { formatDateTimeShanghai } from '@/lib/date-time'
 
 type TabType = 'regex' | 'cron'
 
+const DEV_TAB_ACTIVE = 'text-primary border-primary'
+const DEV_BTN_SELECTED = 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
+
 export function DevTool() {
   const [tab, setTab] = useState<TabType>('regex')
 
@@ -16,7 +19,7 @@ export function DevTool() {
             onClick={() => setTab(t)}
             className={`py-3 px-4 text-sm font-medium transition-colors border-b-2 ${
               tab === t
-                ? 'text-primary border-primary'
+                ? DEV_TAB_ACTIVE
                 : 'text-muted-foreground border-transparent hover:text-foreground'
             }`}
           >
@@ -110,14 +113,14 @@ function RegexTool() {
       <div>
         <label className="text-sm font-medium mb-1 block">正则表达式</label>
         <div className="flex gap-2">
-          <div className="flex-1 flex items-center border border-border rounded-lg bg-background focus-within:ring-2 focus-within:ring-primary">
+          <div className="flex-1 flex items-center border border-border rounded-lg bg-background focus-within:ring-2 focus-within:ring-ring">
             <span className="pl-3 text-muted-foreground">/</span>
             <input
               type="text"
               value={pattern}
               onChange={(e) => setPattern(e.target.value)}
               placeholder="输入正则表达式..."
-              className="flex-1 px-1 py-2 text-sm font-mono bg-transparent focus:outline-none"
+              className="flex-1 px-1 py-2 text-sm font-mono text-foreground bg-transparent focus:outline-none"
             />
             <span className="pr-1 text-muted-foreground">/</span>
             <input
@@ -125,7 +128,7 @@ function RegexTool() {
               value={flags}
               onChange={(e) => setFlags(e.target.value)}
               placeholder="g"
-              className="w-12 px-1 py-2 text-sm font-mono bg-transparent focus:outline-none text-center"
+              className="w-12 px-1 py-2 text-sm font-mono text-foreground bg-transparent focus:outline-none text-center"
             />
           </div>
         </div>
@@ -141,7 +144,7 @@ function RegexTool() {
               onClick={() => handlePreset(preset)}
               className={`px-3 py-1.5 text-xs rounded-lg transition-colors border ${
                 pattern === preset.pattern
-                  ? 'bg-primary text-primary-foreground border-primary'
+                  ? DEV_BTN_SELECTED
                   : 'bg-secondary hover:bg-secondary/80 border-border'
               }`}
             >
@@ -157,14 +160,14 @@ function RegexTool() {
           value={testString}
           onChange={(e) => setTestString(e.target.value)}
           placeholder="输入要测试的文本..."
-          className="w-full h-32 px-3 py-2 text-sm font-mono border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+          className="w-full h-32 px-3 py-2 text-sm font-mono text-foreground border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none"
         />
       </div>
 
       <div>
         <label className="text-sm font-medium mb-1 block">高亮预览</label>
         <div
-          className="w-full min-h-[80px] px-3 py-2 text-sm font-mono border border-border rounded-lg bg-secondary/30 whitespace-pre-wrap"
+          className="w-full min-h-[80px] px-3 py-2 text-sm font-mono text-foreground border border-border rounded-lg bg-secondary/30 whitespace-pre-wrap"
           dangerouslySetInnerHTML={{ __html: highlightMatches || '<span class="text-muted-foreground">无匹配</span>' }}
         />
       </div>
@@ -191,7 +194,7 @@ function RegexTool() {
                 {matches.map((m, i) => (
                   <tr key={i} className="border-t border-border">
                     <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{m.match}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-foreground">{m.match}</td>
                     <td className="px-3 py-2 text-xs">{m.index}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">
                       {m.groups.length > 0 ? m.groups.join(', ') : '-'}
@@ -398,7 +401,7 @@ function CronTool() {
           value={expression}
           onChange={(e) => setExpression(e.target.value)}
           placeholder="* * * * *"
-          className="w-full px-3 py-2 text-sm font-mono border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full px-3 py-2 text-sm font-mono text-foreground border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
         />
         {error && <div className="text-xs text-destructive mt-1">{error}</div>}
       </div>
@@ -412,7 +415,7 @@ function CronTool() {
               onClick={() => setExpression(preset.value)}
               className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                 expression === preset.value
-                  ? 'bg-primary text-primary-foreground'
+                  ? DEV_BTN_SELECTED
                   : 'bg-secondary hover:bg-secondary/80'
               }`}
             >
@@ -433,23 +436,23 @@ function CronTool() {
             <div className="grid grid-cols-5 gap-2 text-xs">
               <div className="text-center">
                 <div className="text-muted-foreground">分钟</div>
-                <div className="font-mono font-medium">{cronParts.minute}</div>
+                <div className="font-mono font-medium text-foreground">{cronParts.minute}</div>
               </div>
               <div className="text-center">
                 <div className="text-muted-foreground">小时</div>
-                <div className="font-mono font-medium">{cronParts.hour}</div>
+                <div className="font-mono font-medium text-foreground">{cronParts.hour}</div>
               </div>
               <div className="text-center">
                 <div className="text-muted-foreground">日</div>
-                <div className="font-mono font-medium">{cronParts.dayOfMonth}</div>
+                <div className="font-mono font-medium text-foreground">{cronParts.dayOfMonth}</div>
               </div>
               <div className="text-center">
                 <div className="text-muted-foreground">月</div>
-                <div className="font-mono font-medium">{cronParts.month}</div>
+                <div className="font-mono font-medium text-foreground">{cronParts.month}</div>
               </div>
               <div className="text-center">
                 <div className="text-muted-foreground">星期</div>
-                <div className="font-mono font-medium">{cronParts.dayOfWeek}</div>
+                <div className="font-mono font-medium text-foreground">{cronParts.dayOfWeek}</div>
               </div>
             </div>
           )}
@@ -472,7 +475,7 @@ function CronTool() {
                 {nextRuns.map((run, i) => (
                   <tr key={i} className="border-t border-border">
                     <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
-                    <td className="px-3 py-2 font-mono text-xs">
+                    <td className="px-3 py-2 font-mono text-xs text-foreground">
                       {formatDateTimeShanghai(run)}
                     </td>
                     <td className="px-3 py-2 text-xs">

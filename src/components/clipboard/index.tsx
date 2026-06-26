@@ -16,6 +16,12 @@ interface ClipboardManagerProps {
   onFormatJson: (text: string) => void;
 }
 
+function isEditableElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
+
 export function ClipboardManager({ onFormatJson }: ClipboardManagerProps) {
   const [items, setItems] = useState<ClipboardItemPreview[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -53,14 +59,6 @@ export function ClipboardManager({ onFormatJson }: ClipboardManagerProps) {
     return () => clearInterval(interval);
   }, [fetchItems]);
 
-  const handleSelect = useCallback((id: number) => {
-    setSelectedId(id);
-    const item = items.find((i) => i.id === id);
-    if (item?.content_type === 'image') {
-      setDetailId(id);
-    }
-  }, [items]);
-
   const handleCopy = useCallback(async (id: number) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
@@ -81,6 +79,16 @@ export function ClipboardManager({ onFormatJson }: ClipboardManagerProps) {
       console.error('Failed to copy item:', error);
     }
   }, [items]);
+
+  const handleItemClick = useCallback((id: number) => {
+    setSelectedId(id);
+    handleCopy(id);
+  }, [handleCopy]);
+
+  const handlePreview = useCallback((id: number) => {
+    setSelectedId(id);
+    setDetailId(id);
+  }, []);
 
   const handlePin = useCallback(async (id: number) => {
     try {
@@ -114,6 +122,8 @@ export function ClipboardManager({ onFormatJson }: ClipboardManagerProps) {
   }, [fetchItems]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (isEditableElement(e.target)) return;
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelectedId((prev) => {
@@ -160,7 +170,7 @@ export function ClipboardManager({ onFormatJson }: ClipboardManagerProps) {
       <div className="px-4 pt-4 pb-2">
         <h2 className="text-xl font-semibold text-foreground">剪切板历史</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          快捷键: ↑↓ 导航 | Enter 复制 | Delete 删除 | Ctrl+P 置顶 | 点击图片预览
+          快捷键: ↑↓ 导航 | Enter 复制 | Delete 删除 | Ctrl+P 置顶 | 点击复制，点击图片预览
         </p>
       </div>
 
@@ -193,7 +203,8 @@ export function ClipboardManager({ onFormatJson }: ClipboardManagerProps) {
                 item={item}
                 isSelected={selectedId === item.id}
                 isCopied={copiedId === item.id}
-                onSelect={handleSelect}
+                onItemClick={handleItemClick}
+                onPreview={handlePreview}
                 onCopy={handleCopy}
                 onPin={handlePin}
                 onDelete={handleDelete}

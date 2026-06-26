@@ -132,11 +132,6 @@ impl ClipboardMonitor {
             }
         });
     }
-
-    pub fn stop(&self) {
-        let mut running = self.running.lock().unwrap();
-        *running = false;
-    }
 }
 
 struct ClipboardShared {

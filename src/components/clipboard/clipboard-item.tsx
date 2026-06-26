@@ -7,7 +7,8 @@ interface ClipboardItemProps {
   item: ClipboardItemPreview;
   isSelected: boolean;
   isCopied?: boolean;
-  onSelect: (id: number) => void;
+  onItemClick: (id: number) => void;
+  onPreview: (id: number) => void;
   onCopy: (id: number) => void;
   onPin: (id: number) => void;
   onDelete: (id: number) => void;
@@ -74,7 +75,8 @@ export function ClipboardItemComponent({
   item,
   isSelected,
   isCopied = false,
-  onSelect,
+  onItemClick,
+  onPreview,
   onCopy,
   onPin,
   onDelete,
@@ -99,7 +101,7 @@ export function ClipboardItemComponent({
 
   return (
     <div
-      onClick={() => onSelect(item.id)}
+      onClick={() => onItemClick(item.id)}
       className={`group relative p-3 rounded-lg cursor-pointer transition-all ${
         isSelected
           ? 'bg-blue-500/10 ring-2 ring-blue-500'
@@ -141,7 +143,7 @@ export function ClipboardItemComponent({
               className="flex items-center gap-2 cursor-zoom-in"
               onClick={(e) => {
                 e.stopPropagation();
-                onSelect(item.id);
+                onPreview(item.id);
               }}
               title="点击预览"
             >
@@ -181,7 +183,7 @@ export function ClipboardItemComponent({
                 onFormatJson(jsonInfo.formatterInput);
               }}
               className="p-1.5 rounded hover:bg-background text-blue-500 hover:text-blue-600"
-              title="JSON 格式化"
+              title="用 JSON 打开"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />

@@ -125,7 +125,18 @@ pub fn run() {
     let settings = Arc::new(Mutex::new(app_settings));
     let settings_for_tray = settings.clone();
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                show_main_window(&window);
+            }
+        }));
+    }
+
+    builder
         .plugin(tauri_plugin_log::Builder::default()
             .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
             .build())

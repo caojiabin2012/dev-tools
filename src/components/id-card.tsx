@@ -169,7 +169,7 @@ export function IdCardTool() {
 
                 <button
                   onClick={() => handleCopy(parseResult.id)}
-                  className="text-xs text-primary hover:underline"
+                  className="text-xs text-muted-foreground hover:text-foreground hover:underline"
                 >
                   复制身份证号
                 </button>
@@ -302,7 +302,7 @@ export function IdCardTool() {
                   <span className="text-sm font-medium">生成结果 ({generated.length}条)</span>
                   <button
                     onClick={handleCopyAll}
-                    className="text-xs text-primary hover:underline"
+                    className="text-xs text-muted-foreground hover:text-foreground hover:underline"
                   >
                     全部复制
                   </button>
@@ -330,7 +330,7 @@ export function IdCardTool() {
                           <td className="px-3 py-2">
                             <button
                               onClick={() => handleCopy(r.id)}
-                              className="text-xs text-primary hover:underline"
+                              className="text-xs text-muted-foreground hover:text-foreground hover:underline"
                             >
                               复制
                             </button>

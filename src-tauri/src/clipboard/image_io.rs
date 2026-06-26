@@ -17,16 +17,6 @@ pub fn gif_dimensions(data: &[u8]) -> Option<(i32, i32)> {
     Some((width, height))
 }
 
-pub fn image_file_extension(data: &[u8], mime_type: Option<&str>) -> &'static str {
-    if is_gif(data) || mime_type == Some("image/gif") {
-        return "gif";
-    }
-    if mime_type.is_some_and(|m| m.contains("jpeg") || m.contains("jpg")) {
-        return "jpg";
-    }
-    "png"
-}
-
 pub fn image_mime_type(data: &[u8], mime_type: Option<&str>) -> &'static str {
     if is_gif(data) {
         return "image/gif";

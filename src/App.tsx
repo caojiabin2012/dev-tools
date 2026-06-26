@@ -30,8 +30,8 @@ const toolGroups: ToolGroup[] = [
   {
     name: '常用工具',
     tools: [
-      { id: 'json-formatter', name: 'JSON 格式化', icon: '📝' },
       { id: 'clipboard', name: '剪切板', icon: '📋' },
+      { id: 'json-formatter', name: 'JSON', icon: '📝' },
       { id: 'calculator', name: '计算器', icon: '🧮' },
       { id: 'calendar', name: '日历', icon: '📅' },
     ],

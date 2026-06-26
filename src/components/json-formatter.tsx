@@ -105,9 +105,12 @@ export function JsonFormatter({ initialInput }: JsonFormatterProps) {
 
   return (
     <div className="h-full flex flex-col p-4 gap-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-foreground">JSON 格式化</h2>
-        <div className="flex items-center gap-3">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">JSON</h2>
+          <p className="text-sm text-muted-foreground mt-1">粘贴 JSON，自动美化并树形展示</p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
           <label className="text-sm text-muted-foreground">配色:</label>
           <select
             value={themeIndex}
@@ -155,7 +158,7 @@ export function JsonFormatter({ initialInput }: JsonFormatterProps) {
           <textarea
             value={input}
             onChange={(e) => handleInputChange(e.target.value)}
-            placeholder="在此粘贴或输入 JSON..."
+            placeholder="粘贴 API 响应、配置文件等 JSON 内容…"
             className="flex-1 resize-none rounded-lg border border-input bg-card p-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring min-h-0"
             spellCheck={false}
           />
@@ -164,7 +167,7 @@ export function JsonFormatter({ initialInput }: JsonFormatterProps) {
         <div className="flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-sm font-medium text-foreground">
-              输出{outputLabel}
+              预览{outputLabel}
             </span>
             <div className="flex gap-1">
               {parsed !== null && outputMode === 'tree' && (
@@ -198,7 +201,7 @@ export function JsonFormatter({ initialInput }: JsonFormatterProps) {
             ) : parsed !== null ? (
               <JsonTree value={parsed} expandAll={expandAll} indent={indent} theme={theme} />
             ) : (
-              <div className="text-muted-foreground">格式化结果...</div>
+              <div className="text-muted-foreground">输入合法 JSON 后在此预览</div>
             )}
           </div>
         </div>
@@ -208,14 +211,14 @@ export function JsonFormatter({ initialInput }: JsonFormatterProps) {
         <button
           onClick={handleFormat}
           disabled={!parsed}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          格式化
+          美化
         </button>
         <button
           onClick={handleCompress}
           disabled={!parsed}
-          className="px-4 py-2 border border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 border border-primary/50 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           压缩
         </button>

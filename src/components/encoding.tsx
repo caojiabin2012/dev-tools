@@ -108,7 +108,7 @@ function Base64Tool() {
             <label className="text-sm font-medium">输出</label>
             <button
               onClick={() => navigator.clipboard.writeText(output)}
-              className="text-xs text-primary hover:underline"
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline"
             >
               复制
             </button>
@@ -194,7 +194,7 @@ function UrlTool() {
             <label className="text-sm font-medium">输出</label>
             <button
               onClick={() => navigator.clipboard.writeText(output)}
-              className="text-xs text-primary hover:underline"
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline"
             >
               复制
             </button>
@@ -359,7 +359,7 @@ function TimestampTool() {
             <span className="font-mono">{result.timestamp}</span>
             <button
               onClick={() => handleCopy(result.timestamp, '时间戳')}
-              className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              className="text-xs px-2 py-0.5 rounded bg-secondary text-foreground hover:bg-secondary/80 transition-colors"
             >
               复制
             </button>
@@ -369,7 +369,7 @@ function TimestampTool() {
             <span className="font-mono">{result.date}</span>
             <button
               onClick={() => handleCopy(result.date, '日期时间')}
-              className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              className="text-xs px-2 py-0.5 rounded bg-secondary text-foreground hover:bg-secondary/80 transition-colors"
             >
               复制
             </button>

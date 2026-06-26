@@ -19,10 +19,10 @@ interface ToolEntry {
   hint: string
 }
 
-const FEATURED_IDS: ToolId[] = ['json-formatter', 'clipboard', 'calculator', 'dev-tool']
+const FEATURED_IDS: ToolId[] = ['clipboard', 'json-formatter', 'calculator', 'dev-tool']
 
 const TOOL_HINTS: Partial<Record<ToolId, string>> = {
-  'json-formatter': '格式化 · 压缩 · 校验',
+  'json-formatter': '美化 · 压缩 · 树形预览',
   clipboard: '历史记录 · 快速粘贴',
   calculator: '计算 · 单位换算',
   calendar: '公历 · 农历 · 节假日',

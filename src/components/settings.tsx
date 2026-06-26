@@ -3,6 +3,7 @@ import { getSettings, saveSettings, getAppVersion, updateShortcuts, installUpdat
 import type { AppSettings } from '@/lib/settings-api';
 import type { UpdateInfo } from '@/lib/updater';
 import type { Theme } from '@/lib/use-theme';
+import { formatShortcutDisplay, isValidShortcut, keyboardEventToShortcut } from '@/lib/shortcuts';
 
 export type SettingsTab = 'general' | 'advanced' | 'about';
 
@@ -20,9 +21,35 @@ const TABS: { id: SettingsTab; label: string }[] = [
 
 const SHORTCUT_TOOLS: { id: string; name: string; icon: string; defaultShortcut: string }[] = [
   { id: 'clipboard', name: '剪切板', icon: '📋', defaultShortcut: 'Ctrl+Shift+V' },
-  { id: 'json-formatter', name: 'JSON 格式化', icon: '📝', defaultShortcut: '' },
+  { id: 'json-formatter', name: 'JSON', icon: '📝', defaultShortcut: '' },
   { id: 'calculator', name: '计算器', icon: '🧮', defaultShortcut: '' },
 ];
+
+const ABOUT_FEATURE_GROUPS = [
+  {
+    name: '常用工具',
+    items: [
+      { icon: '📋', label: '剪切板', desc: '历史记录 · 图片 OCR · 快速复制' },
+      { icon: '📝', label: 'JSON', desc: '美化排版 · 一键压缩 · 树形高亮' },
+      { icon: '🧮', label: '计算器', desc: '科学计算 · 单位 / 汇率 / 个税等' },
+      { icon: '📅', label: '日历', desc: '农历黄历 · 备忘 · 提醒' },
+    ],
+  },
+  {
+    name: '编码与生成',
+    items: [
+      { icon: '🔄', label: '编码工具', desc: 'Base64 · URL · 时间戳' },
+      { icon: '⚡', label: '生成工具', desc: 'UUID · 随机密码' },
+    ],
+  },
+  {
+    name: '查询与开发',
+    items: [
+      { icon: '🪪', label: '身份证', desc: '解析 · 校验 · 批量生成' },
+      { icon: '🛠️', label: '开发工具', desc: '正则测试 · Cron 解析' },
+    ],
+  },
+] as const;
 
 interface SettingsProps {
   activeTab: SettingsTab;
@@ -91,8 +118,8 @@ export function Settings({
       }
 
       // Validate format
-      if (!/^(Ctrl|Alt|Shift|Meta)(\+(Ctrl|Alt|Shift|Meta))*\+[A-Za-z0-9]+$/.test(shortcut) && shortcut !== '') {
-        setShortcutError('快捷键格式不正确，例如：Ctrl+Shift+V');
+      if (!isValidShortcut(shortcut)) {
+        setShortcutError('快捷键格式不正确，例如：Ctrl+Shift+V 或 Ctrl+~');
         return;
       }
 
@@ -123,20 +150,9 @@ export function Settings({
     e.preventDefault();
     e.stopPropagation();
 
-    const parts: string[] = [];
-    if (e.ctrlKey) parts.push('Ctrl');
-    if (e.altKey) parts.push('Alt');
-    if (e.shiftKey) parts.push('Shift');
-    if (e.metaKey) parts.push('Meta');
-
-    // Only add the key if it's not a modifier
-    if (!['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
-      const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-      parts.push(key);
-    }
-
-    if (parts.length > 1) {
-      handleShortcutChange(toolId, parts.join('+'));
+    const shortcut = keyboardEventToShortcut(e.nativeEvent);
+    if (shortcut) {
+      handleShortcutChange(toolId, shortcut);
       setEditingShortcut(null);
     }
   }, [editingShortcut, handleShortcutChange]);
@@ -209,7 +225,7 @@ export function Settings({
 
               <SectionTitle title="快捷键" className="mt-8" />
               <p className="text-xs text-muted-foreground -mt-2">
-                点击输入框后按下键盘快捷键，按 Esc 取消
+                点击输入框后按下键盘快捷键，按 Esc 取消；1 键左侧的 ~ 键可设为 Ctrl+~
               </p>
               {shortcutError && (
                 <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
@@ -248,7 +264,9 @@ export function Settings({
                         >
                           {isEditing
                             ? '按下快捷键...'
-                            : currentShortcut || '点击设置'}
+                            : currentShortcut
+                              ? formatShortcutDisplay(currentShortcut)
+                              : '点击设置'}
                         </button>
                         {currentShortcut && !isEditing && (
                           <button
@@ -361,8 +379,29 @@ export function Settings({
                 )}
               </div>
 
-              <div className="text-xs text-muted-foreground text-center space-y-1">
-                <p>JSON 格式化 · 剪切板管理 · 图片 OCR</p>
+              <div className="p-4 bg-card rounded-lg border border-border">
+                <p className="text-sm font-medium text-foreground mb-3">功能一览</p>
+                <div className="space-y-4">
+                  {ABOUT_FEATURE_GROUPS.map((group) => (
+                    <div key={group.name}>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">{group.name}</p>
+                      <div className="grid gap-2">
+                        {group.items.map((item) => (
+                          <div
+                            key={item.label}
+                            className="flex items-start gap-2.5 rounded-lg bg-secondary/40 px-3 py-2"
+                          >
+                            <span className="text-base leading-none mt-0.5 shrink-0">{item.icon}</span>
+                            <div className="min-w-0">
+                              <p className="text-sm text-foreground">{item.label}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -415,7 +454,7 @@ function ThemeSelector({
             onClick={() => onChange(option.id)}
             className={`flex flex-col items-center gap-2 p-3 rounded-lg border text-sm transition-colors ${
               theme === option.id
-                ? 'border-blue-500 bg-blue-500/10 text-foreground font-medium'
+                ? 'border-primary bg-primary/10 text-primary font-medium'
                 : 'border-border text-muted-foreground hover:bg-accent/50 hover:text-foreground'
             }`}
           >
@@ -448,7 +487,7 @@ function SettingItem({
       <button
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-          checked ? 'bg-blue-500' : 'bg-input'
+          checked ? 'bg-primary' : 'bg-input'
         }`}
       >
         <span

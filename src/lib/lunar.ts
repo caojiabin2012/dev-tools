@@ -103,30 +103,10 @@ export function getWesternZodiac(date: Date): string {
   return zodiacNames[index]
 }
 
-const SOLAR_TERMS: { name: string; month: number; day: number }[] = [
-  { name: '小寒', month: 1, day: 6 }, { name: '大寒', month: 1, day: 20 },
-  { name: '立春', month: 2, day: 4 }, { name: '雨水', month: 2, day: 19 },
-  { name: '惊蛰', month: 3, day: 6 }, { name: '春分', month: 3, day: 21 },
-  { name: '清明', month: 4, day: 5 }, { name: '谷雨', month: 4, day: 20 },
-  { name: '立夏', month: 5, day: 6 }, { name: '小满', month: 5, day: 21 },
-  { name: '芒种', month: 6, day: 6 }, { name: '夏至', month: 6, day: 22 },
-  { name: '小暑', month: 7, day: 7 }, { name: '大暑', month: 7, day: 23 },
-  { name: '立秋', month: 8, day: 8 }, { name: '处暑', month: 8, day: 23 },
-  { name: '白露', month: 9, day: 8 }, { name: '秋分', month: 9, day: 23 },
-  { name: '寒露', month: 10, day: 8 }, { name: '霜降', month: 10, day: 23 },
-  { name: '立冬', month: 11, day: 7 }, { name: '小雪', month: 11, day: 22 },
-  { name: '大雪', month: 12, day: 7 }, { name: '冬至', month: 12, day: 22 },
-]
-
 export function getSolarTerm(date: Date): string | null {
-  const month = date.getMonth() + 1
-  const day = date.getDate()
-  for (const term of SOLAR_TERMS) {
-    if (term.month === month && term.day === day) {
-      return term.name
-    }
-  }
-  return null
+  const solar = Solar.fromYmd(date.getFullYear(), date.getMonth() + 1, date.getDate())
+  const jieQi = solar.getLunar().getJieQi()
+  return jieQi || null
 }
 
 // 获取节日（农历+公历）

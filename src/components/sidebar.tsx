@@ -85,7 +85,7 @@ export function Sidebar({
             onClick={() => onSelect('home')}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
               activeTool === 'home'
-                ? 'bg-accent text-accent-foreground font-medium'
+                ? 'bg-primary/10 text-primary font-medium'
                 : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
             }`}
           >
@@ -105,7 +105,7 @@ export function Sidebar({
                   onClick={() => onSelect(tool.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                     activeTool === tool.id
-                      ? 'bg-accent text-accent-foreground font-medium'
+                      ? 'bg-primary/10 text-primary font-medium'
                       : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
                   }`}
                 >
