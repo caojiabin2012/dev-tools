@@ -2,12 +2,11 @@ use std::sync::{Arc, Mutex};
 use tauri::State;
 use sha2::{Sha256, Digest};
 use crate::clipboard::database::{Database, ClipboardItemPreview, ClipboardItem};
-use crate::clipboard::{LAST_CLIPBOARD_HASH, SKIP_NEXT_IMAGE};
+use crate::clipboard::{LAST_CLIPBOARD_HASH, OwnClipboardWriteGuard};
 use crate::clipboard::image_io::{
-    set_clipboard_gif, is_gif, image_mime_type,
+    set_clipboard_gif, set_clipboard_static_image, is_gif, image_mime_type,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
-use std::sync::atomic::Ordering;
 use serde::{Deserialize, Serialize};
 
 pub struct ClipboardDbState {
@@ -114,7 +113,7 @@ pub fn get_clipboard_image_data_url(
 
 #[tauri::command]
 pub fn copy_image_to_clipboard(state: State<'_, ClipboardDbState>, item_id: i64) -> Result<(), String> {
-    SKIP_NEXT_IMAGE.store(true, Ordering::SeqCst);
+    let _write_guard = OwnClipboardWriteGuard::begin();
 
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let detail = db.get_item_detail(item_id).map_err(|e| e.to_string())?;
@@ -129,25 +128,13 @@ pub fn copy_image_to_clipboard(state: State<'_, ClipboardDbState>, item_id: i64)
         return set_clipboard_gif(&image_data);
     }
 
-    let width = detail.image_width.ok_or("No width")? as u32;
-    let height = detail.image_height.ok_or("No height")? as u32;
-
+    // 监听器通过 arboard 读回 RGBA，hash 需与读回结果一致
     let img = image::load_from_memory(&image_data).map_err(|e| e.to_string())?;
     let rgba = img.to_rgba8();
-    let bytes = rgba.into_raw();
-
-    // Hash BEFORE writing so monitor won't re-capture
-    let hash = hash_bytes(&bytes);
+    let hash = hash_bytes(rgba.as_raw());
     *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
 
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    let img_data = arboard::ImageData {
-        width: width as usize,
-        height: height as usize,
-        bytes: std::borrow::Cow::Owned(bytes),
-    };
-    clipboard.set_image(img_data).map_err(|e| e.to_string())?;
-    Ok(())
+    set_clipboard_static_image(&image_data)
 }
 
 fn hash_bytes(data: &[u8]) -> String {

@@ -143,13 +143,24 @@ struct ClipboardShared {
 unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_CLIPBOARDUPDATE => {
+            // 同步读剪贴板会与写操作并发，Windows 上可能崩溃；延迟到后台线程处理
+            if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
+                return LRESULT(0);
+            }
             let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
             if ptr != 0 {
                 let shared = &*(ptr as *const ClipboardShared);
                 if *shared.running.lock().unwrap() {
-                    if let Err(e) = read_and_save_clipboard(&shared.db) {
-                        log::trace!("Clipboard read error: {}", e);
-                    }
+                    let db = shared.db.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(80));
+                        if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
+                            return;
+                        }
+                        if let Err(e) = read_and_save_clipboard(&db) {
+                            log::trace!("Clipboard read error: {}", e);
+                        }
+                    });
                 }
             }
             LRESULT(0)
@@ -191,6 +202,10 @@ fn save_gif_if_changed(
 }
 
 fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
+    if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
     // 1. 复制 .gif 文件：优先从文件列表读取原文件（保留动画）
     {
         let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
