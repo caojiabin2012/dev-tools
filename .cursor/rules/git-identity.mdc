@@ -1,0 +1,28 @@
+---
+description: Git 提交与推送必须使用仓库配置的个人身份，禁止 cursoragent
+alwaysApply: true
+---
+
+# Git 身份与推送
+
+对本仓库执行 **git commit**、**git push** 时：
+
+1. **必须使用本仓库 Git 用户**，不得使用 `cursoragent` 或任何 Cursor 默认身份：
+   - 用户名：`cao.jiabin`
+   - 邮箱：`caojiabin2012@126.com`
+
+2. 提交前确认身份（应输出 `cao.jiabin`，而非 `cursoragent`）：
+   ```bash
+   git config user.name
+   git config user.email
+   ```
+
+3. 若身份不正确，在本仓库内设置（仅改当前仓库，不改 global）：
+   ```bash
+   git config user.name "cao.jiabin"
+   git config user.email "caojiabin2012@126.com"
+   ```
+
+4. 推送 GitHub 使用已配置的 `origin`（`git@github.com:caojiabin2012/dev-tools.git`），不要用 Cursor 内置账号代推。
+
+5. 创建 commit 时**不要**使用 `--author` 覆盖为 cursoragent；需要 amend 时也保持上述身份。
