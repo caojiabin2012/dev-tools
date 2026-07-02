@@ -160,7 +160,9 @@ pub fn set_clipboard_static_image(data: &[u8]) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use clipboard_win::{raw, register_format};
+        use crate::clipboard::clipboard_io_lock;
 
+        let _io_guard = clipboard_io_lock();
         let _clip = clipboard_win::Clipboard::new_attempts(10)
             .map_err(|e| format!("Failed to open clipboard: {e:?}"))?;
 
@@ -176,6 +178,9 @@ pub fn set_clipboard_static_image(data: &[u8]) -> Result<(), String> {
 
     #[cfg(not(target_os = "windows"))]
     {
+        use crate::clipboard::clipboard_io_lock;
+
+        let _io_guard = clipboard_io_lock();
         let img = image::load_from_memory(data).map_err(|e| e.to_string())?;
         let rgba = img.to_rgba8();
         let (width, height) = rgba.dimensions();
@@ -201,7 +206,9 @@ pub fn set_clipboard_gif(data: &[u8]) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use clipboard_win::{raw, register_format};
+        use crate::clipboard::clipboard_io_lock;
 
+        let _io_guard = clipboard_io_lock();
         let _clip = clipboard_win::Clipboard::new_attempts(10)
             .map_err(|e| format!("Failed to open clipboard: {e:?}"))?;
 

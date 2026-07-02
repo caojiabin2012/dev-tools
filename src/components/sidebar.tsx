@@ -59,7 +59,7 @@ export function Sidebar({
             className="text-lg font-semibold text-foreground flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity text-left"
           >
             <span className="text-xl shrink-0">🧰</span>
-            <span className="truncate">Tool Kit</span>
+            <span className="truncate">Dev Tools</span>
           </button>
           {hasUpdate && onUpdateClick && (
             <HeaderIconButton title="有新版本可用" onClick={onUpdateClick} highlight>

@@ -59,7 +59,7 @@ export function About() {
     <div className="h-full flex flex-col items-center justify-center p-6">
       <div className="text-center space-y-4 max-w-md">
         <div className="text-6xl">🧰</div>
-        <h1 className="text-2xl font-bold text-foreground">Tool Kit</h1>
+        <h1 className="text-2xl font-bold text-foreground">Dev Tools</h1>
         <p className="text-muted-foreground">开发者工具箱</p>
         <p className="text-sm text-muted-foreground">
           版本 {version || '...'}

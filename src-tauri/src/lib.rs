@@ -5,9 +5,12 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use crate::clipboard::{Database, ClipboardDbState, ClipboardMonitor};
 use crate::settings::{SettingsState, AppSettings};
 
+mod app_paths;
 mod clipboard;
+mod diagnostics;
 mod ocr;
 mod settings;
+mod stack;
 
 fn show_main_window(window: &tauri::WebviewWindow) {
     let _ = window.set_skip_taskbar(false);
@@ -83,32 +86,11 @@ fn register_shortcuts(app: &tauri::App, shortcuts: &std::collections::HashMap<St
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Log panics to file so we can diagnose crashes
-    std::panic::set_hook(Box::new(|info| {
-        let thread = std::thread::current();
-        let thread_name = thread.name().unwrap_or("unknown");
-        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
-            s.to_string()
-        } else if let Some(s) = info.payload().downcast_ref::<String>() {
-            s.clone()
-        } else {
-            "Box<dyn Any>".to_string()
-        };
-        let location = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column())).unwrap_or_default();
-        let msg = format!("PANIC on thread '{}': {} at {}", thread_name, payload, location);
-        log::error!("{}", msg);
-        // Also write to crash file for diagnosis
-        if let Some(app_dir) = dirs::data_local_dir() {
-            let crash_path = app_dir.join("tool-kit").join("crash.log");
-            let _ = std::fs::write(&crash_path, &msg);
-        }
-    }));
+    diagnostics::install_panic_hook();
 
-    let app_dir = dirs::data_local_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("tool-kit");
+    let log_dir = crate::app_paths::logs_dir();
 
-    std::fs::create_dir_all(&app_dir).ok();
+    let app_dir = crate::app_paths::app_data_dir();
 
     let db_path = app_dir.join("clipboard.db");
     let db_path_str = db_path.to_str().unwrap_or("clipboard.db").to_string();
@@ -137,9 +119,19 @@ pub fn run() {
     }
 
     builder
-        .plugin(tauri_plugin_log::Builder::default()
-            .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
-            .build())
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
+                .max_file_size(512_000)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                        path: log_dir,
+                        file_name: Some("app".into()),
+                    }),
+                ])
+                .build(),
+        )
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -163,6 +155,28 @@ pub fn run() {
             settings::get_app_version,
             settings::install_update_and_restart,
             settings::update_shortcuts,
+            diagnostics::record_client_error,
+            stack::stack_get_state,
+            stack::stack_set_install_root,
+            stack::stack_pick_install_root,
+            stack::stack_pick_component_source,
+            stack::stack_set_component_version,
+            stack::stack_download_component,
+            stack::stack_install_component,
+            stack::stack_start_component,
+            stack::stack_stop_component,
+            stack::stack_uninstall_component,
+            stack::stack_start_all,
+            stack::stack_stop_all,
+            stack::stack_open_install_root,
+            stack::stack_open_www_root,
+            stack::stack_pick_www_subdir,
+            stack::stack_update_settings,
+            stack::stack_set_component_port,
+            stack::stack_regenerate_configs,
+            stack::stack_open_component_config,
+            stack::stack_open_component_log,
+            stack::stack_open_site,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();

@@ -212,7 +212,7 @@ export function Settings({
               )}
               <SettingItem
                 title="开机自启动"
-                description="系统启动时自动运行 Tool Kit"
+                description="系统启动时自动运行 Dev Tools"
                 checked={settings.auto_start}
                 onChange={(v) => handleToggle('auto_start', v)}
               />
@@ -295,10 +295,13 @@ export function Settings({
               <SectionTitle title="数据存储" />
               <InfoCard title="本地数据目录">
                 <code className="text-xs text-muted-foreground break-all">
-                  %LOCALAPPDATA%\tool-kit
+                  %LOCALAPPDATA%\dev-tools
                 </code>
                 <p className="text-xs text-muted-foreground mt-2">
                   剪切板历史、应用设置等数据保存在此目录
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  崩溃诊断：<code className="text-[11px]">crash.log</code> · 运行日志：<code className="text-[11px]">logs/</code>
                 </p>
               </InfoCard>
 
@@ -317,7 +320,7 @@ export function Settings({
             <div className="space-y-6">
               <div className="flex flex-col items-center text-center py-4">
                 <div className="text-5xl mb-3">🧰</div>
-                <h3 className="text-lg font-semibold text-foreground">Tool Kit</h3>
+                <h3 className="text-lg font-semibold text-foreground">Dev Tools</h3>
                 <p className="text-sm text-muted-foreground mt-1">开发者工具箱</p>
                 <p className="text-xs text-muted-foreground mt-2">版本 v{version || '...'}</p>
               </div>

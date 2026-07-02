@@ -1,8 +1,11 @@
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use sha2::{Sha256, Digest};
 use crate::clipboard::database::Database;
-use crate::clipboard::{LAST_CLIPBOARD_HASH, SKIP_NEXT_IMAGE};
+use crate::clipboard::{clipboard_io_lock, LAST_CLIPBOARD_HASH, SKIP_NEXT_IMAGE};
+
+#[cfg(target_os = "windows")]
+static CLIPBOARD_DEBOUNCE_GEN: AtomicU64 = AtomicU64::new(0);
 use crate::clipboard::image_io::{
     gif_dimensions, try_read_gif_from_file_list_paths, try_read_gif_from_clipboard_formats,
     try_read_gif_from_hdrop, clipboard_has_gif_file,
@@ -65,7 +68,7 @@ impl ClipboardMonitor {
         std::thread::spawn(move || {
             unsafe {
                 let instance = GetModuleHandleW(None).unwrap();
-                let window_class = "ToolKitClipboardListener";
+                let window_class = "DevToolsClipboardListener";
                 let window_class_w: Vec<u16> = window_class.encode_utf16().chain(std::iter::once(0)).collect();
 
                 let wnd_class = WNDCLASSW {
@@ -152,8 +155,13 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 let shared = &*(ptr as *const ClipboardShared);
                 if *shared.running.lock().unwrap() {
                     let db = shared.db.clone();
+                    // 连续复制会触发多次 WM_CLIPBOARDUPDATE；只处理最后一次，避免线程堆积并发读剪贴板
+                    let generation = CLIPBOARD_DEBOUNCE_GEN.fetch_add(1, Ordering::SeqCst) + 1;
                     std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(80));
+                        std::thread::sleep(std::time::Duration::from_millis(120));
+                        if CLIPBOARD_DEBOUNCE_GEN.load(Ordering::SeqCst) != generation {
+                            return;
+                        }
                         if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
                             return;
                         }
@@ -201,9 +209,18 @@ fn save_gif_if_changed(
     Ok(())
 }
 
-fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
+enum CapturedClipboard {
+    Gif(Vec<u8>),
+    RgbaImage { bytes: Vec<u8>, width: u32, height: u32 },
+    Text(String),
+    SkipGifFallback,
+}
+
+fn capture_clipboard_content() -> Result<CapturedClipboard, String> {
+    let _io_guard = clipboard_io_lock();
+
     if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
-        return Ok(());
+        return Ok(CapturedClipboard::SkipGifFallback);
     }
 
     // 1. 复制 .gif 文件：优先从文件列表读取原文件（保留动画）
@@ -211,25 +228,25 @@ fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
         let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
         if let Ok(files) = clipboard.get().file_list() {
             if let Some(gif_data) = try_read_gif_from_file_list_paths(&files) {
-                return save_gif_if_changed(db, gif_data);
+                return Ok(CapturedClipboard::Gif(gif_data));
             }
         }
     }
 
     // 1b. HDROP 兜底（arboard 有时读不到文件列表）
     if let Some(gif_data) = try_read_gif_from_hdrop() {
-        return save_gif_if_changed(db, gif_data);
+        return Ok(CapturedClipboard::Gif(gif_data));
     }
 
     // 2. 剪贴板上的 GIF 格式 / 嵌入 GIF 数据
     if let Some(gif_data) = try_read_gif_from_clipboard_formats() {
-        return save_gif_if_changed(db, gif_data);
+        return Ok(CapturedClipboard::Gif(gif_data));
     }
 
     // 剪贴板上是 .gif 文件但读取失败时，不要用静态缩略图覆盖
     if clipboard_has_gif_file() {
         log::warn!("GIF file detected on clipboard but failed to read — skipping static image fallback");
-        return Ok(());
+        return Ok(CapturedClipboard::SkipGifFallback);
     }
 
     let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
@@ -239,7 +256,7 @@ fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
             if SKIP_NEXT_IMAGE.swap(false, Ordering::SeqCst) {
                 let hash = hash_bytes(&image_data.bytes);
                 *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
-                return Ok(());
+                return Ok(CapturedClipboard::SkipGifFallback);
             }
 
             let hash = hash_bytes(&image_data.bytes);
@@ -248,32 +265,22 @@ fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
                 *h != hash
             };
 
-            if hash_changed {
-                *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
-
-                let bytes = image_data.bytes.into_owned();
-                let width = image_data.width as u32;
-                let height = image_data.height as u32;
-
-                log::info!("Detected clipboard image: {}x{}, {} bytes", width, height, bytes.len());
-
-                // arboard 已返回 RGBA 格式，勿再做 BGRA 转换（否则红蓝通道会互换导致偏色）
-                if let Some(img) = image::RgbaImage::from_raw(width, height, bytes) {
-                    let mut png_buf: Vec<u8> = Vec::new();
-                    if img.write_to(&mut std::io::Cursor::new(&mut png_buf), image::ImageFormat::Png).is_ok() {
-                        let db = db.lock().unwrap();
-                        if let Err(e) = db.add_image_item(&png_buf, width as i32, height as i32, "image/png") {
-                            log::error!("Failed to save clipboard image: {}", e);
-                        } else {
-                            log::info!("Saved clipboard image: {}x{}", width, height);
-                        }
-                    }
-                }
+            if !hash_changed {
+                return Ok(CapturedClipboard::SkipGifFallback);
             }
-            return Ok(());
+
+            *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
+
+            let bytes = image_data.bytes.into_owned();
+            let width = image_data.width as u32;
+            let height = image_data.height as u32;
+
+            log::info!("Detected clipboard image: {}x{}, {} bytes", width, height, bytes.len());
+
+            return Ok(CapturedClipboard::RgbaImage { bytes, width, height });
         }
         Err(arboard::Error::ContentNotAvailable) => {}
-        Err(arboard::Error::ClipboardOccupied) => return Ok(()),
+        Err(arboard::Error::ClipboardOccupied) => return Ok(CapturedClipboard::SkipGifFallback),
         Err(_) => {}
     }
 
@@ -281,7 +288,7 @@ fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
         Ok(text) => {
             let normalized = text.trim().to_string();
             if normalized.is_empty() {
-                return Ok(());
+                return Ok(CapturedClipboard::SkipGifFallback);
             }
 
             let hash = hash_text(&normalized);
@@ -290,25 +297,57 @@ fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
                 *h != hash
             };
 
-            if hash_changed {
-                *LAST_CLIPBOARD_HASH.lock().unwrap() = hash.clone();
+            if !hash_changed {
+                return Ok(CapturedClipboard::SkipGifFallback);
+            }
 
-                let db = db.lock().unwrap();
-                if let Ok(false) = db.is_duplicate_text(&normalized) {
-                    if let Err(e) = db.add_text_item(&normalized) {
-                        log::error!("Failed to save clipboard text: {}", e);
+            *LAST_CLIPBOARD_HASH.lock().unwrap() = hash.clone();
+            Ok(CapturedClipboard::Text(normalized))
+        }
+        Err(arboard::Error::ContentNotAvailable) => Ok(CapturedClipboard::SkipGifFallback),
+        Err(arboard::Error::ClipboardOccupied) => Ok(CapturedClipboard::SkipGifFallback),
+        Err(_) => Ok(CapturedClipboard::SkipGifFallback),
+    }
+}
+
+fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
+    let captured = capture_clipboard_content()?;
+
+    match captured {
+        CapturedClipboard::Gif(gif_data) => save_gif_if_changed(db, gif_data),
+        CapturedClipboard::RgbaImage { bytes, width, height } => {
+            // arboard 已返回 RGBA 格式，勿再做 BGRA 转换（否则红蓝通道会互换导致偏色）
+            if let Some(img) = image::RgbaImage::from_raw(width, height, bytes) {
+                let mut png_buf: Vec<u8> = Vec::new();
+                if img
+                    .write_to(&mut std::io::Cursor::new(&mut png_buf), image::ImageFormat::Png)
+                    .is_ok()
+                {
+                    let db = db.lock().unwrap();
+                    if let Err(e) =
+                        db.add_image_item(&png_buf, width as i32, height as i32, "image/png")
+                    {
+                        log::error!("Failed to save clipboard image: {}", e);
                     } else {
-                        log::info!("Saved clipboard text: {} chars", normalized.len());
+                        log::info!("Saved clipboard image: {}x{}", width, height);
                     }
                 }
             }
+            Ok(())
         }
-        Err(arboard::Error::ContentNotAvailable) => {}
-        Err(arboard::Error::ClipboardOccupied) => {}
-        Err(_) => {}
+        CapturedClipboard::Text(normalized) => {
+            let db = db.lock().unwrap();
+            if let Ok(false) = db.is_duplicate_text(&normalized) {
+                if let Err(e) = db.add_text_item(&normalized) {
+                    log::error!("Failed to save clipboard text: {}", e);
+                } else {
+                    log::info!("Saved clipboard text: {} chars", normalized.len());
+                }
+            }
+            Ok(())
+        }
+        CapturedClipboard::SkipGifFallback => Ok(()),
     }
-
-    Ok(())
 }
 
 fn hash_bytes(data: &[u8]) -> String {

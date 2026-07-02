@@ -1,8 +1,9 @@
-# Tool Kit · 开发者工具箱
+# Dev Tools · 开发者工具箱
 
 基于 **Tauri 2 + React 19 + TypeScript** 的跨平台桌面开发者工具集，集成 JSON 格式化、剪切板历史、计算器、日历、编码转换、生成器、正则/Cron 等常用功能。
 
-[![Release](https://img.shields.io/github/v/release/caojiabin2012/tool-kit)](https://github.com/caojiabin2012/tool-kit/releases)
+[![Release](https://img.shields.io/github/v/release/caojiabin2012/dev-tools)](https://github.com/caojiabin2012/dev-tools/releases)
+[![Gitee](https://gitee.com/caojiabin/dev-tools/badge/star.svg?theme=dark)](https://gitee.com/caojiabin/dev-tools)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## 功能概览
@@ -117,7 +118,7 @@ pnpm tauri build
 
 ### 下载
 
-前往 [Releases](https://github.com/caojiabin2012/tool-kit/releases) 下载最新版安装包。
+前往 [Releases](https://github.com/caojiabin2012/dev-tools/releases) 下载最新版安装包。
 
 ## 快捷键与托盘
 
@@ -130,7 +131,7 @@ pnpm tauri build
 
 ## 数据目录
 
-应用数据保存在 `%LOCALAPPDATA%\tool-kit\`：
+应用数据保存在 `%LOCALAPPDATA%\dev-tools\`：
 
 - `settings.json` — 应用设置
 - `clipboard.db` — 剪切板历史
@@ -139,7 +140,7 @@ pnpm tauri build
 ## 项目结构
 
 ```
-tool-kit/
+dev-tools/
 ├── src/                  # React 前端
 │   ├── components/       # 各功能模块 UI
 │   └── lib/              # API、Hook、工具函数

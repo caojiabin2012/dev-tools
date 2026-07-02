@@ -30,11 +30,7 @@ impl Default for AppSettings {
 
 impl AppSettings {
     fn path() -> std::path::PathBuf {
-        let dir = dirs::data_local_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("tool-kit");
-        std::fs::create_dir_all(&dir).ok();
-        dir.join("settings.json")
+        crate::app_paths::app_data_dir().join("settings.json")
     }
 
     pub fn load() -> Self {
@@ -64,7 +60,7 @@ impl AppSettings {
     }
 }
 
-const AUTOSTART_APP_NAME: &str = "Tool Kit";
+const AUTOSTART_APP_NAME: &str = crate::app_paths::APP_NAME;
 
 fn build_autostart() -> Result<auto_launch::AutoLaunch, String> {
     let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -183,7 +179,7 @@ pub async fn install_update_and_restart(app: tauri::AppHandle) -> Result<bool, S
     log::info!("开始下载应用更新: {}", update.version);
 
     let client = reqwest::Client::builder()
-        .user_agent("tool-kit-app")
+        .user_agent("dev-tools-app")
         .build()
         .map_err(|e| format!("创建下载客户端失败: {e}"))?;
 

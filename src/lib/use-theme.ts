@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 
 export type Theme = 'light' | 'dark' | 'system';
 
-const THEME_KEY = 'tool-kit-theme';
+const THEME_KEY = 'dev-tools-theme';
+const LEGACY_THEME_KEY = 'tool-kit-theme';
 
 function getSystemTheme(): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -10,7 +11,7 @@ function getSystemTheme(): 'light' | 'dark' {
 
 function getStoredTheme(): Theme {
   try {
-    return (localStorage.getItem(THEME_KEY) as Theme) || 'system';
+    return ((localStorage.getItem(THEME_KEY) ?? localStorage.getItem(LEGACY_THEME_KEY)) as Theme) || 'system';
   } catch {
     return 'system';
   }

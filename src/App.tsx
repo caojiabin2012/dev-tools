@@ -9,6 +9,7 @@ import { EncodingTool } from '@/components/encoding'
 import { GeneratorTool } from '@/components/generator'
 import { ToastContainer } from '@/lib/toast'
 import { DevTool } from '@/components/dev-tool'
+import { StackPanel } from '@/components/stack'
 import { Settings, type SettingsTab } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
 import { Home } from '@/components/home'
@@ -18,7 +19,7 @@ import { useUpdate } from '@/lib/use-update'
 export type ToolId =
   | 'home'
   | 'json-formatter' | 'clipboard' | 'calculator' | 'calendar'
-  | 'id-card' | 'encoding' | 'generator' | 'dev-tool'
+  | 'id-card' | 'encoding' | 'generator' | 'dev-tool' | 'stack'
   | 'settings'
 
 interface ToolGroup {
@@ -57,12 +58,26 @@ const toolGroups: ToolGroup[] = [
   {
     name: '开发工具',
     tools: [
+      { id: 'stack', name: '本地环境', icon: '🖥️' },
       { id: 'dev-tool', name: '开发工具', icon: '🛠️' },
     ],
   },
 ]
 
-const allTools = toolGroups.flatMap(g => g.tools)
+/** 暂不展示的工具入口，功能代码保留 */
+const hiddenTools: ToolId[] = ['stack']
+
+function filterToolGroups(groups: ToolGroup[], hidden: ToolId[]): ToolGroup[] {
+  return groups
+    .map((group) => ({
+      ...group,
+      tools: group.tools.filter((tool) => !hidden.includes(tool.id)),
+    }))
+    .filter((group) => group.tools.length > 0)
+}
+
+const visibleToolGroups = filterToolGroups(toolGroups, hiddenTools)
+const allTools = visibleToolGroups.flatMap((g) => g.tools)
 
 export default function App() {
   const [activeTool, setActiveTool] = useState<ToolId>('home')
@@ -97,7 +112,7 @@ export default function App() {
   return (
     <div className="flex h-screen bg-background">
       <Sidebar
-        toolGroups={toolGroups}
+        toolGroups={visibleToolGroups}
         activeTool={activeTool}
         onSelect={setActiveTool}
         onOpenSettings={() => openSettings('general')}
@@ -106,7 +121,7 @@ export default function App() {
       />
       <main className="flex-1 overflow-hidden">
         {activeTool === 'home' && (
-          <Home toolGroups={toolGroups} onSelect={setActiveTool} />
+          <Home toolGroups={visibleToolGroups} onSelect={setActiveTool} />
         )}
         {activeTool === 'json-formatter' && (
           <JsonFormatter key={jsonFormatterInput ?? 'empty'} initialInput={jsonFormatterInput} />
@@ -129,6 +144,9 @@ export default function App() {
         </div>
         <div className={activeTool === 'dev-tool' ? 'h-full' : 'h-0 overflow-hidden'}>
           <DevTool />
+        </div>
+        <div className={activeTool === 'stack' ? 'h-full' : 'h-0 overflow-hidden'}>
+          {activeTool === 'stack' && <StackPanel />}
         </div>
         {activeTool === 'settings' && (
           <Settings

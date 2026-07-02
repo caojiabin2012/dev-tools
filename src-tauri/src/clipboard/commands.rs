@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use tauri::State;
 use sha2::{Sha256, Digest};
 use crate::clipboard::database::{Database, ClipboardItemPreview, ClipboardItem};
-use crate::clipboard::{LAST_CLIPBOARD_HASH, OwnClipboardWriteGuard};
+use crate::clipboard::{clipboard_io_lock, LAST_CLIPBOARD_HASH, OwnClipboardWriteGuard};
 use crate::clipboard::image_io::{
     set_clipboard_gif, set_clipboard_static_image, is_gif, image_mime_type,
 };
@@ -83,6 +83,9 @@ pub fn clear_clipboard_history(
 
 #[tauri::command]
 pub fn copy_to_clipboard(text: String) -> Result<(), String> {
+    let _write_guard = OwnClipboardWriteGuard::begin();
+    let _io_guard = clipboard_io_lock();
+
     // Hash BEFORE writing so monitor won't re-capture
     let hash = hash_bytes(text.as_bytes());
     *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
@@ -115,12 +118,14 @@ pub fn get_clipboard_image_data_url(
 pub fn copy_image_to_clipboard(state: State<'_, ClipboardDbState>, item_id: i64) -> Result<(), String> {
     let _write_guard = OwnClipboardWriteGuard::begin();
 
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    let detail = db.get_item_detail(item_id).map_err(|e| e.to_string())?;
-    let detail = detail.ok_or("Item not found")?;
-    let image_data = detail.content_image.ok_or("No image data")?;
-    let mime_type = detail.mime_type.as_deref().unwrap_or("image/png");
-    drop(db);
+    let (image_data, mime_type) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let detail = db.get_item_detail(item_id).map_err(|e| e.to_string())?;
+        let detail = detail.ok_or("Item not found")?;
+        let image_data = detail.content_image.ok_or("No image data")?;
+        let mime_type = detail.mime_type.unwrap_or_else(|| "image/png".to_string());
+        (image_data, mime_type)
+    };
 
     if mime_type == "image/gif" || is_gif(&image_data) {
         let hash = hash_bytes(&image_data);

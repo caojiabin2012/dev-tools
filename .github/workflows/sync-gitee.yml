@@ -21,5 +21,6 @@ jobs:
 
       - name: Push to Gitee
         run: |
-          git remote add gitee git@gitee.com:caojiabin/tool-kit.git
+          git remote remove gitee 2>/dev/null || true
+          git remote add gitee git@gitee.com:caojiabin/dev-tools.git
           git push gitee master --force
