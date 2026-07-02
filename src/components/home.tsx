@@ -29,8 +29,8 @@ const TOOL_HINTS: Partial<Record<ToolId, string>> = {
   encoding: 'Base64 · URL · 时间戳',
   generator: 'UUID · 密码 · Hash',
   'id-card': '解析 · 校验 · 生成',
-  'dev-tool': '正则 · Cron',
-  stack: 'MySQL · Nginx · PHP · Redis',
+  'dev-tool': '正则 · Cron 表达式',
+
 }
 
 function SearchIcon() {
@@ -122,7 +122,7 @@ export function Home({ toolGroups, onSelect }: HomeProps) {
     <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto flex h-full max-w-3xl flex-col px-8 py-10">
         <header className="mb-8 shrink-0">
-          <p className="text-sm text-muted-foreground">Dev Tools</p>
+          <p className="text-sm text-muted-foreground">DevTools</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
             选择工具
           </h1>

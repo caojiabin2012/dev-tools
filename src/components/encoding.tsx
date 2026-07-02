@@ -2,32 +2,37 @@ import { useState, useCallback } from 'react'
 import { copyToClipboard } from '@/lib/clipboard-api'
 import { formatDateTimeShanghai, parseDateTimeShanghai } from '@/lib/date-time'
 import { notify } from '@/lib/toast'
+import { toolTabBarClass, toolTabButtonClass, toolContentClass } from '@/lib/tab-styles'
 
 type TabType = 'base64' | 'url' | 'timestamp'
+
+const tabs: { id: TabType; name: string; icon: string }[] = [
+  { id: 'timestamp', name: '时间戳', icon: '🕐' },
+  { id: 'base64', name: 'Base64', icon: '📝' },
+  { id: 'url', name: 'URL', icon: '🔗' },
+]
 
 export function EncodingTool() {
   const [tab, setTab] = useState<TabType>('timestamp')
 
   return (
     <div className="h-full flex flex-col">
-      {/* 标签页 */}
-      <div className="flex border-b border-border px-4">
-        {(['timestamp', 'base64', 'url'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`py-3 px-4 text-sm font-medium transition-colors border-b-2 ${
-              tab === t
-                ? 'text-primary border-primary'
-                : 'text-muted-foreground border-transparent hover:text-foreground'
-            }`}
-          >
-            {t === 'timestamp' ? '时间戳转换' : t === 'base64' ? 'Base64' : 'URL 编解码'}
-          </button>
-        ))}
+      <div className={toolTabBarClass}>
+        <div className="flex gap-2">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={toolTabButtonClass(tab === t.id)}
+            >
+              <span className="mr-1.5">{t.icon}</span>
+              {t.name}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className={`${toolContentClass} overflow-y-auto p-6`}>
         {tab === 'timestamp' && <TimestampTool />}
         {tab === 'base64' && <Base64Tool />}
         {tab === 'url' && <UrlTool />}

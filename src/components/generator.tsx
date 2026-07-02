@@ -1,31 +1,35 @@
 import { useState, useCallback } from 'react'
 import { notify } from '@/lib/toast'
+import { toolTabBarClass, toolTabButtonClass, toolContentClass } from '@/lib/tab-styles'
 
 type TabType = 'uuid' | 'password'
+
+const tabs: { id: TabType; name: string; icon: string }[] = [
+  { id: 'password', name: '密码', icon: '🔑' },
+  { id: 'uuid', name: 'UUID', icon: '🎲' },
+]
 
 export function GeneratorTool() {
   const [tab, setTab] = useState<TabType>('password')
 
   return (
     <div className="h-full flex flex-col">
-      {/* 标签页 */}
-      <div className="flex border-b border-border px-4">
-        {(['password', 'uuid'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`py-3 px-4 text-sm font-medium transition-colors border-b-2 ${
-              tab === t
-                ? 'text-primary border-primary'
-                : 'text-muted-foreground border-transparent hover:text-foreground'
-            }`}
-          >
-            {t === 'password' ? '密码生成' : 'UUID 生成'}
-          </button>
-        ))}
+      <div className={toolTabBarClass}>
+        <div className="flex gap-2">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={toolTabButtonClass(tab === t.id)}
+            >
+              <span className="mr-1.5">{t.icon}</span>
+              {t.name}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className={`${toolContentClass} overflow-y-auto p-6`}>
         {tab === 'password' && <PasswordTool />}
         {tab === 'uuid' && <UuidTool />}
       </div>

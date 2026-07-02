@@ -3,8 +3,14 @@ import { searchRegions, type FlatRegion } from '@/lib/region-codes'
 import { generateIdCards, parseIdCard, type IdCardResult } from '@/lib/id-card'
 import { copyToClipboard } from '@/lib/clipboard-api'
 import { notify } from '@/lib/toast'
+import { toolTabBarClass, toolTabButtonClass, toolContentClass } from '@/lib/tab-styles'
 
 type TabType = 'parse' | 'generate'
+
+const tabs: { id: TabType; name: string; icon: string }[] = [
+  { id: 'parse', name: '解析', icon: '🔍' },
+  { id: 'generate', name: '生成', icon: '🎲' },
+]
 
 export function IdCardTool() {
   const [tab, setTab] = useState<TabType>('parse')
@@ -79,31 +85,22 @@ export function IdCardTool() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* 标签页 */}
-      <div className="flex border-b border-border px-4">
-        <button
-          onClick={() => setTab('parse')}
-          className={`py-3 px-4 text-sm font-medium transition-colors border-b-2 ${
-            tab === 'parse'
-              ? 'text-primary border-primary'
-              : 'text-muted-foreground border-transparent hover:text-foreground'
-          }`}
-        >
-          号码解析
-        </button>
-        <button
-          onClick={() => setTab('generate')}
-          className={`py-3 px-4 text-sm font-medium transition-colors border-b-2 ${
-            tab === 'generate'
-              ? 'text-primary border-primary'
-              : 'text-muted-foreground border-transparent hover:text-foreground'
-          }`}
-        >
-          批量生成
-        </button>
+      <div className={toolTabBarClass}>
+        <div className="flex gap-2">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={toolTabButtonClass(tab === t.id)}
+            >
+              <span className="mr-1.5">{t.icon}</span>
+              {t.name}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className={`${toolContentClass} overflow-y-auto p-6`}>
         {tab === 'parse' ? (
           <div className="max-w-2xl mx-auto space-y-4">
             {/* 解析输入 */}

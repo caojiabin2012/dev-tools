@@ -15,6 +15,7 @@ import { DepositCalculator } from './deposit-calculator'
 import { CurrencyConverter } from './currency-converter'
 import { KinshipConverter } from './kinship-converter'
 import { BmiCalculator } from './bmi-calculator'
+import { subTabBarClass, subTabButtonCompactClass, toolContentClass } from '@/lib/tab-styles'
 
 type ConverterType =
   | 'currency'
@@ -96,18 +97,14 @@ export function ConverterPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-border overflow-x-auto">
-        <div className="flex gap-2 min-w-max">
+    <div className="flex h-full flex-col bg-background">
+      <div className={`${subTabBarClass} overflow-x-auto px-3 py-3`}>
+        <div className="flex min-w-max gap-2">
           {converterTypes.map((type) => (
             <button
               key={type.id}
               onClick={() => setActiveType(type.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors whitespace-nowrap ${
-                activeType === type.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-              }`}
+              className={subTabButtonCompactClass(activeType === type.id)}
             >
               <span>{type.icon}</span>
               <span>{type.name}</span>
@@ -115,7 +112,7 @@ export function ConverterPanel() {
           ))}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className={`${toolContentClass} overflow-y-auto`}>
         {renderConverter()}
       </div>
     </div>

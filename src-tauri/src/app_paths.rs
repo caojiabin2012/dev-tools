@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 
-pub const APP_NAME: &str = "Dev Tools";
+pub const APP_NAME: &str = "DevTools";
 pub const APP_DATA_DIR: &str = "dev-tools";
 const LEGACY_APP_DATA_DIR: &str = "tool-kit";
 

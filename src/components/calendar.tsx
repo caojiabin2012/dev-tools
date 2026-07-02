@@ -5,6 +5,7 @@ import {
   getReminders, addReminder, deleteReminder,
   updateReminder, type CalendarReminder,
 } from '@/lib/calendar-store'
+import { subTabBarClass, subTabButtonClass } from '@/lib/tab-styles'
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
 const MEMO_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899']
@@ -264,17 +265,18 @@ export function Calendar() {
         </div>
 
         {/* 标签页切换 */}
-        <div className="flex border-b border-border">
-          {(['huangli', 'memo', 'reminder'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2 text-sm font-medium transition-colors
-                ${activeTab === tab ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              {tab === 'huangli' ? '黄历' : tab === 'memo' ? '备忘' : '提醒'}
-            </button>
-          ))}
+        <div className={`${subTabBarClass} px-4 py-2`}>
+          <div className="flex gap-2">
+            {(['huangli', 'memo', 'reminder'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={subTabButtonClass(activeTab === tab)}
+              >
+                {tab === 'huangli' ? '黄历' : tab === 'memo' ? '备忘' : '提醒'}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* 标签页内容 */}

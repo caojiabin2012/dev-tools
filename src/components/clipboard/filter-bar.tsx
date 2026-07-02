@@ -35,7 +35,7 @@ export function FilterBar({
   onClearAll,
 }: FilterBarProps) {
   return (
-    <div className="border-b border-border bg-card p-3 space-y-3">
+    <div className="border-b border-border bg-background p-3 space-y-3">
       <div className="flex items-center gap-3">
         <div className="flex-1 relative">
           <input

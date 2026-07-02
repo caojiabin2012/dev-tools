@@ -6,6 +6,23 @@ interface HistoryItem {
   result: string
 }
 
+const OPERATORS = new Set(['÷', '×', '−', '＋'])
+
+const calcKeyBase =
+  'flex-1 select-none rounded-2xl font-medium transition-all active:scale-95'
+const calcKeyDefault =
+  'bg-secondary text-secondary-foreground hover:bg-accent'
+const calcKeyOperator =
+  'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
+const calcToolBtnClass =
+  'rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+
+function calcKeyClass(label: string, size: 'sm' | 'lg' = 'lg'): string {
+  const sizeClass = size === 'sm' ? 'py-2 text-sm' : 'py-3.5 text-xl'
+  const style = OPERATORS.has(label) ? calcKeyOperator : calcKeyDefault
+  return `${calcKeyBase} ${sizeClass} ${style}`
+}
+
 export function CalculatorPanel() {
   const [expression, setExpression] = useState('')
   const [angleMode, setAngleMode] = useState<'deg' | 'rad'>('deg')
@@ -140,30 +157,30 @@ export function CalculatorPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-border flex items-center gap-2">
+    <div className="flex h-full flex-col bg-background">
+      <div className="flex items-center gap-2 border-b border-border bg-background p-4">
         <button
           onClick={() => setShowScientific(!showScientific)}
-          className="px-3 py-1.5 text-sm rounded-lg transition-colors bg-accent text-accent-foreground hover:bg-accent/80"
+          className={calcToolBtnClass}
         >
           {showScientific ? '收起科学面板' : '科学面板'}
         </button>
         <button
           onClick={toggleAngleMode}
-          className="px-3 py-1.5 text-sm rounded-lg transition-colors bg-accent text-accent-foreground hover:bg-accent/80"
+          className={calcToolBtnClass}
         >
           {angleMode === 'deg' ? 'Deg' : 'Rad'}
         </button>
         <div className="flex-1" />
         <button
           onClick={() => setShowHistory(!showHistory)}
-          className="px-3 py-1.5 text-sm rounded-lg transition-colors bg-accent text-accent-foreground hover:bg-accent/80"
+          className={calcToolBtnClass}
         >
           历史记录
         </button>
       </div>
 
-      <div className="p-4 border-b border-border">
+      <div className="border-b border-border bg-background p-4">
         <input
           ref={inputRef}
           type="text"
@@ -180,54 +197,48 @@ export function CalculatorPanel() {
       </div>
 
       {showScientific && (
-        <div className="p-2 border-b border-border bg-card/50">
+        <div className="border-b border-border bg-background px-4 py-3">
+          <div className="mx-auto max-w-sm space-y-2">
           {scientificRows.map((row, ri) => (
-            <div key={ri} className="flex gap-1 mb-1">
+            <div key={ri} className="flex gap-2">
               {row.map((label) => (
                 <button
                   key={label}
                   onClick={() => handleScientificButton(label)}
-                  className="flex-1 py-2 text-sm rounded-lg transition-colors bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium"
+                  className={calcKeyClass(label, 'sm')}
                 >
                   {label}
                 </button>
               ))}
             </div>
           ))}
+          </div>
         </div>
       )}
 
-      <div className="flex-1 p-2">
+      <div className="flex-1 bg-background px-4 py-3">
+        <div className="mx-auto max-w-sm space-y-2">
         {standardButtons.map((row, ri) => (
-          <div key={ri} className="flex gap-1 mb-1">
+          <div key={ri} className="flex gap-2">
             {row.map((btn) => (
               <button
                 key={btn}
                 onClick={() => handleStandardButton(btn)}
-                className="flex-1 py-3 text-lg rounded-lg transition-colors bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium"
+                className={calcKeyClass(btn)}
               >
                 {btn}
               </button>
             ))}
           </div>
         ))}
-        <div className="flex gap-1">
-          <button
-            onClick={() => insertAtCursor('(')}
-            className="flex-1 py-3 text-lg rounded-lg transition-colors bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium"
-          >
+        <div className="flex gap-2">
+          <button onClick={() => insertAtCursor('(')} className={calcKeyClass('(')}>
             (
           </button>
-          <button
-            onClick={() => insertAtCursor(')')}
-            className="flex-1 py-3 text-lg rounded-lg transition-colors bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium"
-          >
+          <button onClick={() => insertAtCursor(')')} className={calcKeyClass(')')}>
             )
           </button>
-          <button
-            onClick={backspace}
-            className="flex-1 py-3 text-lg rounded-lg transition-colors bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium"
-          >
+          <button onClick={backspace} className={calcKeyClass('⌫')}>
             ⌫
           </button>
           <button
@@ -237,10 +248,11 @@ export function CalculatorPanel() {
                 setExpression(result.replace(/,/g, ''))
               }
             }}
-            className="flex-1 py-3 text-lg rounded-lg transition-colors bg-primary hover:bg-primary/80 text-primary-foreground font-medium"
+            className={`${calcKeyBase} py-3.5 text-xl ${calcKeyOperator}`}
           >
             ＝
           </button>
+        </div>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Dev Tools",
-  "version": "0.4.7",
+  "productName": "DevTools",
+  "version": "0.4.9",
   "identifier": "com.devtools.app",
   "build": {
     "frontendDist": "../dist",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Dev Tools - 开发者工具箱",
+        "title": "DevTools",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
@@ -25,7 +25,7 @@
     ],
     "trayIcon": {
       "iconPath": "icons/32x32.png",
-      "tooltip": "Dev Tools"
+      "tooltip": "DevTools"
     },
     "security": {
       "csp": null,

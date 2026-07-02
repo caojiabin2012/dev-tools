@@ -1,34 +1,37 @@
 import { useState, useMemo } from 'react'
 import { formatDateTimeShanghai } from '@/lib/date-time'
+import { toolTabBarClass, toolTabButtonClass, toolContentClass } from '@/lib/tab-styles'
 
 type TabType = 'regex' | 'cron'
 
-const DEV_TAB_ACTIVE = 'text-primary border-primary'
 const DEV_BTN_SELECTED = 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
+
+const tabs: { id: TabType; name: string; icon: string }[] = [
+  { id: 'regex', name: '正则', icon: '🔤' },
+  { id: 'cron', name: 'Cron', icon: '⏰' },
+]
 
 export function DevTool() {
   const [tab, setTab] = useState<TabType>('regex')
 
   return (
     <div className="h-full flex flex-col">
-      {/* 标签页 */}
-      <div className="flex border-b border-border px-4">
-        {(['regex', 'cron'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`py-3 px-4 text-sm font-medium transition-colors border-b-2 ${
-              tab === t
-                ? DEV_TAB_ACTIVE
-                : 'text-muted-foreground border-transparent hover:text-foreground'
-            }`}
-          >
-            {t === 'regex' ? '正则测试' : 'Cron 表达式'}
-          </button>
-        ))}
+      <div className={toolTabBarClass}>
+        <div className="flex gap-2">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={toolTabButtonClass(tab === t.id)}
+            >
+              <span className="mr-1.5">{t.icon}</span>
+              {t.name}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className={`${toolContentClass} overflow-y-auto p-6`}>
         {tab === 'regex' && <RegexTool />}
         {tab === 'cron' && <CronTool />}
       </div>

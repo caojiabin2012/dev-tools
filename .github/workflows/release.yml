@@ -142,7 +142,7 @@ jobs:
           find_mac_tar() {
             find artifacts/macos-installer -name "*.tar.gz" -type f 2>/dev/null | head -1
           }
-          # GitHub Release 会把产物名里的空格变成点（Dev Tools -> Dev.Tools）
+          # GitHub Release 会把产物名里的空格变成点（DevTools -> DevTools）
           release_filename() {
             basename "$1" | tr ' ' '.'
           }

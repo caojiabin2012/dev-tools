@@ -7,9 +7,9 @@ import { Calendar } from '@/components/calendar'
 import { IdCardTool } from '@/components/id-card'
 import { EncodingTool } from '@/components/encoding'
 import { GeneratorTool } from '@/components/generator'
-import { ToastContainer } from '@/lib/toast'
 import { DevTool } from '@/components/dev-tool'
-import { StackPanel } from '@/components/stack'
+import { ToastContainer } from '@/lib/toast'
+
 import { Settings, type SettingsTab } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
 import { Home } from '@/components/home'
@@ -19,7 +19,7 @@ import { useUpdate } from '@/lib/use-update'
 export type ToolId =
   | 'home'
   | 'json-formatter' | 'clipboard' | 'calculator' | 'calendar'
-  | 'id-card' | 'encoding' | 'generator' | 'dev-tool' | 'stack'
+  | 'id-card' | 'encoding' | 'generator' | 'dev-tool'
   | 'settings'
 
 interface ToolGroup {
@@ -29,43 +29,22 @@ interface ToolGroup {
 
 const toolGroups: ToolGroup[] = [
   {
-    name: '常用工具',
+    name: '',
     tools: [
       { id: 'clipboard', name: '剪切板', icon: '📋' },
-      { id: 'json-formatter', name: 'JSON', icon: '📝' },
+      { id: 'json-formatter', name: 'JSON 格式化', icon: '📝' },
       { id: 'calculator', name: '计算器', icon: '🧮' },
       { id: 'calendar', name: '日历', icon: '📅' },
-    ],
-  },
-  {
-    name: '编码转换',
-    tools: [
-      { id: 'encoding', name: '编码工具', icon: '🔄' },
-    ],
-  },
-  {
-    name: '生成器',
-    tools: [
-      { id: 'generator', name: '生成工具', icon: '⚡' },
-    ],
-  },
-  {
-    name: '查询解析',
-    tools: [
-      { id: 'id-card', name: '身份证工具', icon: '🪪' },
-    ],
-  },
-  {
-    name: '开发工具',
-    tools: [
-      { id: 'stack', name: '本地环境', icon: '🖥️' },
-      { id: 'dev-tool', name: '开发工具', icon: '🛠️' },
+      { id: 'encoding', name: '编码转换', icon: '🔄' },
+      { id: 'generator', name: '生成器', icon: '⚡' },
+      { id: 'dev-tool', name: '表达式', icon: '🛠️' },
+      { id: 'id-card', name: '身份证', icon: '🪪' },
     ],
   },
 ]
 
 /** 暂不展示的工具入口，功能代码保留 */
-const hiddenTools: ToolId[] = ['stack']
+const hiddenTools: ToolId[] = []
 
 function filterToolGroups(groups: ToolGroup[], hidden: ToolId[]): ToolGroup[] {
   return groups
@@ -144,9 +123,6 @@ export default function App() {
         </div>
         <div className={activeTool === 'dev-tool' ? 'h-full' : 'h-0 overflow-hidden'}>
           <DevTool />
-        </div>
-        <div className={activeTool === 'stack' ? 'h-full' : 'h-0 overflow-hidden'}>
-          {activeTool === 'stack' && <StackPanel />}
         </div>
         {activeTool === 'settings' && (
           <Settings

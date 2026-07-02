@@ -3,6 +3,7 @@ import { getSettings, saveSettings, getAppVersion, updateShortcuts, installUpdat
 import type { AppSettings } from '@/lib/settings-api';
 import type { UpdateInfo } from '@/lib/updater';
 import type { Theme } from '@/lib/use-theme';
+import { toolTabBarClass, toolTabButtonInlineClass } from '@/lib/tab-styles';
 import { formatShortcutDisplay, isValidShortcut, keyboardEventToShortcut } from '@/lib/shortcuts';
 
 export type SettingsTab = 'general' | 'advanced' | 'about';
@@ -27,26 +28,16 @@ const SHORTCUT_TOOLS: { id: string; name: string; icon: string; defaultShortcut:
 
 const ABOUT_FEATURE_GROUPS = [
   {
-    name: '常用工具',
+    name: '',
     items: [
       { icon: '📋', label: '剪切板', desc: '历史记录 · 图片 OCR · 快速复制' },
-      { icon: '📝', label: 'JSON', desc: '美化排版 · 一键压缩 · 树形高亮' },
+      { icon: '📝', label: 'JSON 格式化', desc: '美化排版 · 一键压缩 · 树形高亮' },
       { icon: '🧮', label: '计算器', desc: '科学计算 · 单位 / 汇率 / 个税等' },
       { icon: '📅', label: '日历', desc: '农历黄历 · 备忘 · 提醒' },
-    ],
-  },
-  {
-    name: '编码与生成',
-    items: [
-      { icon: '🔄', label: '编码工具', desc: 'Base64 · URL · 时间戳' },
-      { icon: '⚡', label: '生成工具', desc: 'UUID · 随机密码' },
-    ],
-  },
-  {
-    name: '查询与开发',
-    items: [
+      { icon: '🔄', label: '编码转换', desc: 'Base64 · URL · 时间戳' },
+      { icon: '⚡', label: '生成器', desc: 'UUID · 随机密码' },
       { icon: '🪪', label: '身份证', desc: '解析 · 校验 · 批量生成' },
-      { icon: '🛠️', label: '开发工具', desc: '正则测试 · Cron 解析' },
+      { icon: '🛠️', label: '表达式', desc: '正则测试 · Cron 解析' },
     ],
   },
 ] as const;
@@ -178,18 +169,14 @@ export function Settings({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-6 pt-6 pb-0 border-b border-border shrink-0">
+      <div className={`${toolTabBarClass} pt-6`}>
         <h2 className="text-xl font-semibold text-foreground">设置</h2>
-        <nav className="flex gap-1 mt-4 -mb-px">
+        <nav className="mt-4 flex gap-2">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.id
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-              }`}
+              className={toolTabButtonInlineClass(activeTab === tab.id)}
             >
               {tab.label}
               {tab.id === 'about' && updateInfo && (
@@ -212,7 +199,7 @@ export function Settings({
               )}
               <SettingItem
                 title="开机自启动"
-                description="系统启动时自动运行 Dev Tools"
+                description="系统启动时自动运行 DevTools"
                 checked={settings.auto_start}
                 onChange={(v) => handleToggle('auto_start', v)}
               />
@@ -320,8 +307,8 @@ export function Settings({
             <div className="space-y-6">
               <div className="flex flex-col items-center text-center py-4">
                 <div className="text-5xl mb-3">🧰</div>
-                <h3 className="text-lg font-semibold text-foreground">Dev Tools</h3>
-                <p className="text-sm text-muted-foreground mt-1">开发者工具箱</p>
+                <h3 className="text-lg font-semibold text-foreground">DevTools</h3>
+                <p className="text-sm text-muted-foreground mt-1">高效研发工作台</p>
                 <p className="text-xs text-muted-foreground mt-2">版本 v{version || '...'}</p>
               </div>
 
@@ -387,7 +374,9 @@ export function Settings({
                 <div className="space-y-4">
                   {ABOUT_FEATURE_GROUPS.map((group) => (
                     <div key={group.name}>
-                      <p className="text-xs font-medium text-muted-foreground mb-2">{group.name}</p>
+                      {group.name && (
+                        <p className="text-xs font-medium text-muted-foreground mb-2">{group.name}</p>
+                      )}
                       <div className="grid gap-2">
                         {group.items.map((item) => (
                           <div

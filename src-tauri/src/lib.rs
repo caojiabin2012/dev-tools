@@ -10,7 +10,8 @@ mod clipboard;
 mod diagnostics;
 mod ocr;
 mod settings;
-mod stack;
+mod window_chrome;
+
 
 fn show_main_window(window: &tauri::WebviewWindow) {
     let _ = window.set_skip_taskbar(false);
@@ -156,27 +157,7 @@ pub fn run() {
             settings::install_update_and_restart,
             settings::update_shortcuts,
             diagnostics::record_client_error,
-            stack::stack_get_state,
-            stack::stack_set_install_root,
-            stack::stack_pick_install_root,
-            stack::stack_pick_component_source,
-            stack::stack_set_component_version,
-            stack::stack_download_component,
-            stack::stack_install_component,
-            stack::stack_start_component,
-            stack::stack_stop_component,
-            stack::stack_uninstall_component,
-            stack::stack_start_all,
-            stack::stack_stop_all,
-            stack::stack_open_install_root,
-            stack::stack_open_www_root,
-            stack::stack_pick_www_subdir,
-            stack::stack_update_settings,
-            stack::stack_set_component_port,
-            stack::stack_regenerate_configs,
-            stack::stack_open_component_config,
-            stack::stack_open_component_log,
-            stack::stack_open_site,
+            window_chrome::sync_window_theme,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
