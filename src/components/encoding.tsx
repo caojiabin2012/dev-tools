@@ -12,6 +12,15 @@ const tabs: { id: TabType; name: string; icon: string }[] = [
   { id: 'url', name: 'URL', icon: '🔗' },
 ]
 
+async function copyWithNotify(text: string, label = '结果') {
+  try {
+    await copyToClipboard(text)
+    notify(`已复制${label}`)
+  } catch {
+    notify('复制失败')
+  }
+}
+
 export function EncodingTool() {
   const [tab, setTab] = useState<TabType>('timestamp')
 
@@ -112,7 +121,7 @@ function Base64Tool() {
           <div className="flex items-center justify-between mb-1">
             <label className="text-sm font-medium">输出</label>
             <button
-              onClick={() => navigator.clipboard.writeText(output)}
+              onClick={() => void copyWithNotify(output, mode === 'encode' ? '编码结果' : '解码结果')}
               className="text-xs text-muted-foreground hover:text-foreground hover:underline"
             >
               复制
@@ -198,7 +207,7 @@ function UrlTool() {
           <div className="flex items-center justify-between mb-1">
             <label className="text-sm font-medium">输出</label>
             <button
-              onClick={() => navigator.clipboard.writeText(output)}
+              onClick={() => void copyWithNotify(output, mode === 'encode' ? '编码结果' : '解码结果')}
               className="text-xs text-muted-foreground hover:text-foreground hover:underline"
             >
               复制
@@ -277,13 +286,8 @@ function TimestampTool() {
     })
   }, [unit])
 
-  const handleCopy = useCallback(async (text: string, label: string) => {
-    try {
-      await copyToClipboard(text)
-      notify(`已复制${label}`)
-    } catch {
-      notify('复制失败')
-    }
+  const handleCopy = useCallback((text: string, label: string) => {
+    void copyWithNotify(text, label)
   }, [])
 
   return (

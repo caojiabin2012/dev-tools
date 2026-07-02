@@ -3,7 +3,7 @@ import { getSettings, saveSettings, getAppVersion, updateShortcuts, installUpdat
 import type { AppSettings } from '@/lib/settings-api';
 import type { UpdateInfo } from '@/lib/updater';
 import type { Theme } from '@/lib/use-theme';
-import { toolTabBarClass, toolTabButtonInlineClass } from '@/lib/tab-styles';
+import { toolTabButtonInlineClass } from '@/lib/tab-styles';
 import { formatShortcutDisplay, isValidShortcut, keyboardEventToShortcut } from '@/lib/shortcuts';
 
 export type SettingsTab = 'general' | 'advanced' | 'about';

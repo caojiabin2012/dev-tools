@@ -306,7 +306,8 @@ function DecodePanel() {
     }
   }, [totalCount, history.length, selectedDetail, previewUrl, refreshHistory]);
 
-  const hasHistoryContext = totalCount > 0 || timeFilter !== 'all' || searchQuery || selectedId !== null;
+  const hasHistoryContext =
+    totalCount > 0 || timeFilter !== 'all' || searchQuery.length > 0 || selectedId !== null;
 
   return (
     <div className="max-w-3xl mx-auto space-y-5">
@@ -565,7 +566,8 @@ function GeneratePanel() {
   }, [totalCount, history.length, selectedDetail, refreshHistory]);
 
   const previewUrl = selectedId !== null ? thumbUrls[selectedId] : null;
-  const hasHistoryContext = totalCount > 0 || timeFilter !== 'all' || searchQuery || selectedId !== null;
+  const hasHistoryContext =
+    totalCount > 0 || timeFilter !== 'all' || searchQuery.length > 0 || selectedId !== null;
 
   return (
     <div className="max-w-3xl mx-auto space-y-5">
