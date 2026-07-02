@@ -8,6 +8,7 @@ import { IdCardTool } from '@/components/id-card'
 import { EncodingTool } from '@/components/encoding'
 import { GeneratorTool } from '@/components/generator'
 import { DevTool } from '@/components/dev-tool'
+import { QrcodeTool } from '@/components/qrcode'
 import { ToastContainer } from '@/lib/toast'
 
 import { Settings, type SettingsTab } from '@/components/settings'
@@ -19,7 +20,7 @@ import { useUpdate } from '@/lib/use-update'
 export type ToolId =
   | 'home'
   | 'json-formatter' | 'clipboard' | 'calculator' | 'calendar'
-  | 'id-card' | 'encoding' | 'generator' | 'dev-tool'
+  | 'id-card' | 'encoding' | 'generator' | 'dev-tool' | 'qrcode'
   | 'settings'
 
 interface ToolGroup {
@@ -37,6 +38,7 @@ const toolGroups: ToolGroup[] = [
       { id: 'calendar', name: '日历', icon: '📅' },
       { id: 'encoding', name: '编码转换', icon: '🔄' },
       { id: 'generator', name: '生成器', icon: '⚡' },
+      { id: 'qrcode', name: '二维码', icon: '🔳' },
       { id: 'dev-tool', name: '表达式', icon: '🛠️' },
       { id: 'id-card', name: '身份证', icon: '🪪' },
     ],
@@ -120,6 +122,9 @@ export default function App() {
         </div>
         <div className={activeTool === 'generator' ? 'h-full' : 'h-0 overflow-hidden'}>
           <GeneratorTool />
+        </div>
+        <div className={activeTool === 'qrcode' ? 'h-full' : 'h-0 overflow-hidden'}>
+          <QrcodeTool />
         </div>
         <div className={activeTool === 'dev-tool' ? 'h-full' : 'h-0 overflow-hidden'}>
           <DevTool />

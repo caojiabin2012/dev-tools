@@ -51,7 +51,7 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <aside className="w-56 border-r border-border bg-card flex flex-col">
-      <div className="p-4 border-b border-border">
+      <div className="flex h-14 shrink-0 items-center border-b border-border px-4">
         <div className="flex items-center gap-1">
           <button
             type="button"

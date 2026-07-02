@@ -36,6 +36,7 @@ const ABOUT_FEATURE_GROUPS = [
       { icon: '📅', label: '日历', desc: '农历黄历 · 备忘 · 提醒' },
       { icon: '🔄', label: '编码转换', desc: 'Base64 · URL · 时间戳' },
       { icon: '⚡', label: '生成器', desc: 'UUID · 随机密码' },
+      { icon: '🔳', label: '二维码', desc: '图片解析 · 文本生成' },
       { icon: '🪪', label: '身份证', desc: '解析 · 校验 · 批量生成' },
       { icon: '🛠️', label: '表达式', desc: '正则测试 · Cron 解析' },
     ],
@@ -169,7 +170,7 @@ export function Settings({
 
   return (
     <div className="h-full flex flex-col">
-      <div className={`${toolTabBarClass} pt-6`}>
+      <div className="shrink-0 border-b border-border px-6 pt-6 pb-4">
         <h2 className="text-xl font-semibold text-foreground">设置</h2>
         <nav className="mt-4 flex gap-2">
           {TABS.map((tab) => (
@@ -285,7 +286,10 @@ export function Settings({
                   %LOCALAPPDATA%\dev-tools
                 </code>
                 <p className="text-xs text-muted-foreground mt-2">
-                  剪切板历史、应用设置等数据保存在此目录
+                  剪切板、二维码历史与应用设置保存在此目录
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  数据库：<code className="text-[11px]">clipboard.db</code> · <code className="text-[11px]">qrcode.db</code>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   崩溃诊断：<code className="text-[11px]">crash.log</code> · 运行日志：<code className="text-[11px]">logs/</code>

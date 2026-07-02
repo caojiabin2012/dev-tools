@@ -1,5 +1,6 @@
-/** 工具页最顶栏 Tab：白底，与侧栏/内容区一致；系统标题栏单独设灰 */
-export const toolTabBarClass = 'shrink-0 border-b border-border bg-background px-6 py-2.5'
+/** 工具页最顶栏 Tab：与侧栏标题同高 h-14，保证分隔线对齐 */
+export const toolTabBarClass =
+  'flex h-14 shrink-0 items-center border-b border-border bg-background px-6'
 
 /** 页面内二级 Tab 条：白底 */
 export const subTabBarClass = 'shrink-0 border-b border-border bg-background px-6 py-3'

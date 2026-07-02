@@ -28,6 +28,7 @@ const TOOL_HINTS: Partial<Record<ToolId, string>> = {
   calendar: '公历 · 农历 · 节假日',
   encoding: 'Base64 · URL · 时间戳',
   generator: 'UUID · 密码 · Hash',
+  qrcode: '解析 · 生成二维码',
   'id-card': '解析 · 校验 · 生成',
   'dev-tool': '正则 · Cron 表达式',
 

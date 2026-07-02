@@ -12,7 +12,8 @@
 |------|------|
 | 首页 | 搜索 + 常用工具快捷入口 + 全部工具网格 |
 | JSON 格式化 | 格式化 / 压缩 / 树形预览 / 多主题配色 |
-| 剪切板 | 文本·图片·文件历史，搜索筛选，OCR，GIF 支持 |
+| 剪切板 | 文本·图片·**文件**历史，搜索筛选，OCR，GIF 支持 |
+| 二维码 | 图片解析、文本生成 PNG，SQLite 历史与时间筛选 |
 | 计算器 | 科学计算 + 长度/重量/汇率等 20+ 单位换算 |
 | 日历 | 公历·农历·黄历·备忘·提醒 |
 | 编码工具 | 时间戳、Base64、URL 编解码 |
@@ -83,7 +84,7 @@
 
 - **前端**：React 19 · TypeScript · Tailwind CSS v4 · Vite 8
 - **桌面**：Tauri 2 · Rust
-- **存储**：SQLite（剪切板历史）
+- **存储**：SQLite（剪切板 `clipboard.db`、二维码 `qrcode.db`）
 - **OCR**：Windows Media OCR（WinRT）
 - **更新**：`tauri-plugin-updater` + GitHub Releases
 
@@ -135,6 +136,7 @@ pnpm tauri build
 
 - `settings.json` — 应用设置
 - `clipboard.db` — 剪切板历史
+- `qrcode.db` — 二维码解析/生成历史
 - `crash.log` — 崩溃诊断日志
 
 ## 项目结构

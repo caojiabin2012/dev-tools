@@ -2,6 +2,10 @@ pub mod database;
 pub mod commands;
 pub mod monitor;
 pub mod image_io;
+pub mod file_io;
+
+#[cfg(not(target_os = "windows"))]
+mod listener;
 
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,7 +15,7 @@ use once_cell::sync::Lazy;
 pub static LAST_CLIPBOARD_HASH: Lazy<Arc<Mutex<String>>> = Lazy::new(|| Arc::new(Mutex::new(String::new())));
 pub static SKIP_NEXT_IMAGE: AtomicBool = AtomicBool::new(false);
 
-/// Windows 剪贴板 API 非线程安全；串行化所有读写，避免连续复制时多线程并发访问导致进程崩溃。
+/// Windows 剪贴板 API 非线程安全；串行化所有读写，避免并发访问导致崩溃。
 pub static CLIPBOARD_IO_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 pub fn clipboard_io_lock() -> MutexGuard<'static, ()> {

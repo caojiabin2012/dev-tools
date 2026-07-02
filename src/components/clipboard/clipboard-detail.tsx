@@ -3,11 +3,14 @@ import {
   getClipboardItemDetail,
   copyToClipboard,
   copyImageToClipboard,
+  copyFilesToClipboard,
+  getFilePathsStatus,
   openFile,
   openFileContainingFolder,
+  parseFilePaths,
   // ocrImage,
 } from '@/lib/clipboard-api';
-import type { ClipboardItemDetail } from '@/lib/clipboard-api';
+import type { ClipboardItemDetail, FilePathsStatus } from '@/lib/clipboard-api';
 import { ClipboardImage } from './clipboard-image';
 // import { ImageOcrOverlay } from './image-ocr-overlay';
 
@@ -27,7 +30,9 @@ function formatFileSize(bytes: number | null): string {
 export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
   const [detail, setDetail] = useState<ClipboardItemDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState<'image' | 'text' | null>(null);
+  const [copied, setCopied] = useState<'image' | 'text' | 'file' | null>(null);
+  const [fileStatus, setFileStatus] = useState<FilePathsStatus | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   // OCR 文字识别与复制功能暂时关闭
   // const [ocrText, setOcrText] = useState<string | null>(null);
   // const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
@@ -37,12 +42,21 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
   useEffect(() => {
     if (!itemId) {
       setDetail(null);
+      setFileStatus(null);
+      setCopyError(null);
       return;
     }
 
     setLoading(true);
+    setCopyError(null);
     getClipboardItemDetail(itemId)
-      .then(setDetail)
+      .then((data) => {
+        setDetail(data);
+        if (data?.content_type === 'file') {
+          return getFilePathsStatus(itemId).then(setFileStatus);
+        }
+        setFileStatus(null);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [itemId]);
@@ -102,21 +116,32 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
     }
   };
 
+  const handleCopyFiles = async () => {
+    if (!detail) return;
+    setCopyError(null);
+    try {
+      await copyFilesToClipboard(detail.id);
+      setCopied('file');
+      setTimeout(() => setCopied(null), 2000);
+    } catch (e) {
+      setCopyError(String(e));
+    }
+  };
+
   const handleCopyFilePath = async () => {
     if (!detail?.file_path) return;
-    await copyToClipboard(detail.file_path);
+    const paths = parseFilePaths(detail.file_path);
+    await copyToClipboard(paths.join('\n'));
     setCopied('text');
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const handleOpenFile = async () => {
-    if (!detail?.file_path) return;
-    await openFile(detail.file_path);
+  const handleOpenFile = async (path: string) => {
+    await openFile(path);
   };
 
-  const handleOpenFolder = async () => {
-    if (!detail?.file_path) return;
-    await openFileContainingFolder(detail.file_path);
+  const handleOpenFolder = async (path: string) => {
+    await openFileContainingFolder(path);
   };
 
   if (!itemId) return null;
@@ -124,6 +149,8 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
   const isText = detail?.content_type === 'text';
   const isImage = detail?.content_type === 'image';
   const isFile = detail?.content_type === 'file';
+  const filePaths = isFile && detail ? parseFilePaths(detail.file_path) : [];
+  const isMultiFile = filePaths.length > 1;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
@@ -203,22 +230,46 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
-                    <span className="text-3xl">📄</span>
+                    <span className="text-3xl">{isMultiFile ? '📁' : '📄'}</span>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-foreground truncate">
-                        {detail.file_name || '未知文件'}
+                        {detail.file_name || (isMultiFile ? `${filePaths.length} 个文件` : '未知文件')}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {formatFileSize(detail.file_size)}
+                        {formatFileSize(fileStatus?.total_size ?? detail.file_size)}
+                        {fileStatus && fileStatus.missing_count > 0 && (
+                          <span className="text-amber-600 dark:text-amber-400 ml-2">
+                            · {fileStatus.missing_count} 个文件已失效
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
-                  <div className="p-3 bg-muted/50 rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">文件路径</p>
-                    <p className="text-sm text-foreground font-mono break-all">
-                      {detail.file_path || '未知路径'}
+                  <div className="p-3 bg-muted/50 rounded-lg space-y-2 max-h-64 overflow-auto">
+                    <p className="text-xs text-muted-foreground">
+                      {isMultiFile ? `文件列表（${filePaths.length}）` : '文件路径'}
                     </p>
+                    {(fileStatus?.paths ?? filePaths.map((path) => ({ path, exists: true, size: null }))).map(
+                      (entry, index) => (
+                        <div
+                          key={`${entry.path}-${index}`}
+                          className="flex items-start gap-2 text-sm font-mono break-all"
+                        >
+                          <span className="shrink-0">{entry.exists ? '📄' : '⚠️'}</span>
+                          <span
+                            className={
+                              entry.exists ? 'text-foreground' : 'text-muted-foreground line-through'
+                            }
+                          >
+                            {entry.path}
+                          </span>
+                        </div>
+                      ),
+                    )}
                   </div>
+                  {copyError && (
+                    <p className="text-sm text-destructive">{copyError}</p>
+                  )}
                 </div>
               )}
             </div>
@@ -253,23 +304,41 @@ export function ClipboardDetail({ itemId, onClose }: ClipboardDetailProps) {
           {isFile && detail?.file_path && (
             <>
               <button
-                onClick={handleCopyFilePath}
+                onClick={handleCopyFiles}
                 className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                {copied === 'file' ? '已复制!' : '复制文件'}
+              </button>
+              <button
+                onClick={handleCopyFilePath}
+                className="px-4 py-2 text-sm border border-border text-muted-foreground rounded-lg hover:bg-accent transition-colors"
               >
                 {copied === 'text' ? '已复制!' : '复制路径'}
               </button>
-              <button
-                onClick={handleOpenFile}
-                className="px-4 py-2 text-sm border border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors"
-              >
-                打开文件
-              </button>
-              <button
-                onClick={handleOpenFolder}
-                className="px-4 py-2 text-sm border border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors"
-              >
-                打开所在目录
-              </button>
+              {(fileStatus?.paths ?? filePaths.map((path) => ({ path, exists: true, size: null })))
+                .filter((entry) => entry.exists)
+                .slice(0, 1)
+                .map((entry) => (
+                  <button
+                    key={entry.path}
+                    onClick={() => handleOpenFile(entry.path)}
+                    className="px-4 py-2 text-sm border border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors"
+                  >
+                    打开文件
+                  </button>
+                ))}
+              {(fileStatus?.paths ?? filePaths.map((path) => ({ path, exists: true, size: null })))
+                .filter((entry) => entry.exists)
+                .slice(0, 1)
+                .map((entry) => (
+                  <button
+                    key={`folder-${entry.path}`}
+                    onClick={() => handleOpenFolder(entry.path)}
+                    className="px-4 py-2 text-sm border border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors"
+                  >
+                    打开所在目录
+                  </button>
+                ))}
             </>
           )}
         </div>

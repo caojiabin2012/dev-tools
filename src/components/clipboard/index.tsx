@@ -6,6 +6,7 @@ import {
   clearClipboardHistory,
   copyToClipboard,
   copyImageToClipboard,
+  copyFilesToClipboard,
 } from '@/lib/clipboard-api';
 import type { ClipboardItemPreview } from '@/lib/clipboard-api';
 import { FilterBar } from './filter-bar';
@@ -69,7 +70,7 @@ export function ClipboardManager({ onFormatJson }: ClipboardManagerProps) {
       } else if (item.content_type === 'image') {
         await copyImageToClipboard(id);
       } else if (item.content_type === 'file' && item.file_path) {
-        await copyToClipboard(item.file_path);
+        await copyFilesToClipboard(id);
       } else {
         return;
       }
@@ -77,6 +78,7 @@ export function ClipboardManager({ onFormatJson }: ClipboardManagerProps) {
       setTimeout(() => setCopiedId(null), 1500);
     } catch (error) {
       console.error('Failed to copy item:', error);
+      alert(String(error));
     }
   }, [items]);
 

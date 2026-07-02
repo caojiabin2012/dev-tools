@@ -7,8 +7,12 @@ use crate::clipboard::{clipboard_io_lock, LAST_CLIPBOARD_HASH, SKIP_NEXT_IMAGE};
 #[cfg(target_os = "windows")]
 static CLIPBOARD_DEBOUNCE_GEN: AtomicU64 = AtomicU64::new(0);
 use crate::clipboard::image_io::{
-    gif_dimensions, try_read_gif_from_file_list_paths, try_read_gif_from_clipboard_formats,
+    gif_dimensions, read_gif_from_path, is_gif_path, try_read_gif_from_clipboard_formats,
     try_read_gif_from_hdrop, clipboard_has_gif_file,
+};
+use crate::clipboard::file_io::{
+    get_clipboard_file_paths, paths_to_storage_json, build_file_meta, hash_file_paths,
+    should_save_as_file_record,
 };
 
 #[cfg(target_os = "windows")]
@@ -59,7 +63,7 @@ impl ClipboardMonitor {
 
         #[cfg(not(target_os = "windows"))]
         {
-            self.start_polling(db, running);
+            crate::clipboard::listener::start(db, running);
         }
     }
 
@@ -120,18 +124,6 @@ impl ClipboardMonitor {
 
                 let _ = RemoveClipboardFormatListener(hwnd);
                 let _ = Box::from_raw(ptr);
-            }
-        });
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    fn start_polling(&self, db: Arc<Mutex<Database>>, running: Arc<Mutex<bool>>) {
-        std::thread::spawn(move || {
-            while *running.lock().unwrap() {
-                if let Err(e) = read_and_save_clipboard(&db) {
-                    log::trace!("Clipboard read error: {}", e);
-                }
-                std::thread::sleep(std::time::Duration::from_millis(500));
             }
         });
     }
@@ -213,7 +205,52 @@ enum CapturedClipboard {
     Gif(Vec<u8>),
     RgbaImage { bytes: Vec<u8>, width: u32, height: u32 },
     Text(String),
+    Files(Vec<std::path::PathBuf>),
     SkipGifFallback,
+}
+
+fn save_files_if_changed(
+    db: &Arc<Mutex<Database>>,
+    paths: Vec<std::path::PathBuf>,
+) -> Result<(), String> {
+    let paths_str: Vec<String> = paths
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    let file_path_json = paths_to_storage_json(&paths);
+
+    if SKIP_NEXT_IMAGE.swap(false, Ordering::SeqCst) {
+        *LAST_CLIPBOARD_HASH.lock().unwrap() = hash_file_paths(&paths_str);
+        return Ok(());
+    }
+
+    let hash = hash_file_paths(&paths_str);
+    let hash_changed = {
+        let h = LAST_CLIPBOARD_HASH.lock().unwrap();
+        *h != hash
+    };
+
+    if !hash_changed {
+        return Ok(());
+    }
+
+    *LAST_CLIPBOARD_HASH.lock().unwrap() = hash.clone();
+    let meta = build_file_meta(&paths_str);
+    log::info!(
+        "Detected clipboard files: {} item(s), {} bytes",
+        meta.paths.len(),
+        meta.total_size
+    );
+
+    let db = db.lock().unwrap();
+    if let Ok(false) = db.is_duplicate_file(&file_path_json) {
+        if let Err(e) = db.add_file_item(&file_path_json, &meta.display_name, meta.total_size) {
+            log::error!("Failed to save clipboard files: {}", e);
+        } else {
+            log::info!("Saved clipboard files: {}", meta.display_name);
+        }
+    }
+    Ok(())
 }
 
 fn capture_clipboard_content() -> Result<CapturedClipboard, String> {
@@ -223,19 +260,22 @@ fn capture_clipboard_content() -> Result<CapturedClipboard, String> {
         return Ok(CapturedClipboard::SkipGifFallback);
     }
 
-    // 1. 复制 .gif 文件：优先从文件列表读取原文件（保留动画）
-    {
-        let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-        if let Ok(files) = clipboard.get().file_list() {
-            if let Some(gif_data) = try_read_gif_from_file_list_paths(&files) {
+    let file_paths = get_clipboard_file_paths();
+
+    // 1. 复制单个 .gif 文件：保留动画
+    if let Some(ref paths) = file_paths {
+        if paths.len() == 1 && is_gif_path(&paths[0]) {
+            if let Some(gif_data) = read_gif_from_path(&paths[0]) {
                 return Ok(CapturedClipboard::Gif(gif_data));
             }
         }
     }
 
     // 1b. HDROP 兜底（arboard 有时读不到文件列表）
-    if let Some(gif_data) = try_read_gif_from_hdrop() {
-        return Ok(CapturedClipboard::Gif(gif_data));
+    if file_paths.is_none() {
+        if let Some(gif_data) = try_read_gif_from_hdrop() {
+            return Ok(CapturedClipboard::Gif(gif_data));
+        }
     }
 
     // 2. 剪贴板上的 GIF 格式 / 嵌入 GIF 数据
@@ -245,8 +285,20 @@ fn capture_clipboard_content() -> Result<CapturedClipboard, String> {
 
     // 剪贴板上是 .gif 文件但读取失败时，不要用静态缩略图覆盖
     if clipboard_has_gif_file() {
-        log::warn!("GIF file detected on clipboard but failed to read — skipping static image fallback");
-        return Ok(CapturedClipboard::SkipGifFallback);
+        let only_gif_files = file_paths.as_ref().is_none_or(|paths| {
+            !paths.is_empty() && paths.iter().all(|p| is_gif_path(p))
+        });
+        if only_gif_files {
+            log::warn!("GIF file detected on clipboard but failed to read — skipping static image fallback");
+            return Ok(CapturedClipboard::SkipGifFallback);
+        }
+    }
+
+    // 3. 多文件 / 非 GIF 单文件
+    if let Some(paths) = file_paths {
+        if should_save_as_file_record(&paths) {
+            return Ok(CapturedClipboard::Files(paths));
+        }
     }
 
     let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
@@ -310,7 +362,7 @@ fn capture_clipboard_content() -> Result<CapturedClipboard, String> {
     }
 }
 
-fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
+pub(crate) fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
     let captured = capture_clipboard_content()?;
 
     match captured {
@@ -346,6 +398,7 @@ fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
             }
             Ok(())
         }
+        CapturedClipboard::Files(paths) => save_files_if_changed(db, paths),
         CapturedClipboard::SkipGifFallback => Ok(()),
     }
 }

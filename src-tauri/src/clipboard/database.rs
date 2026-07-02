@@ -100,6 +100,15 @@ impl Database {
         Ok(self.conn.last_insert_rowid())
     }
 
+    pub fn add_file_item(&self, file_path_json: &str, file_name: &str, file_size: i64) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO clipboard_items (content_type, file_path, file_name, file_size)
+             VALUES ('file', ?1, ?2, ?3)",
+            params![file_path_json, file_name, file_size],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
     pub fn get_items(
         &self,
         content_type: Option<&str>,
@@ -243,7 +252,14 @@ impl Database {
         if let Some(sq) = search_query {
             if !sq.is_empty() {
                 let idx = param_values.len() + 1;
-                query.push_str(&format!(" AND content_text LIKE ?{}", idx));
+                query.push_str(&format!(
+                    " AND (content_text LIKE ?{} OR file_name LIKE ?{} OR file_path LIKE ?{})",
+                    idx,
+                    idx + 1,
+                    idx + 2
+                ));
+                param_values.push(Box::new(format!("%{}%", sq)));
+                param_values.push(Box::new(format!("%{}%", sq)));
                 param_values.push(Box::new(format!("%{}%", sq)));
             }
         }
@@ -271,6 +287,15 @@ impl Database {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM clipboard_items WHERE content_type = 'text' AND content_text = ?1",
             params![text],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    pub fn is_duplicate_file(&self, file_path_json: &str) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM clipboard_items WHERE content_type = 'file' AND file_path = ?1",
+            params![file_path_json],
             |row| row.get(0),
         )?;
         Ok(count > 0)

@@ -6,6 +6,9 @@ use crate::clipboard::{clipboard_io_lock, LAST_CLIPBOARD_HASH, OwnClipboardWrite
 use crate::clipboard::image_io::{
     set_clipboard_gif, set_clipboard_static_image, is_gif, image_mime_type,
 };
+use crate::clipboard::file_io::{
+    parse_stored_paths, hash_file_paths, set_clipboard_files, build_file_meta,
+};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 
@@ -146,6 +149,75 @@ fn hash_bytes(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
     hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+#[derive(Debug, Serialize)]
+pub struct FilePathEntryStatus {
+    pub path: String,
+    pub exists: bool,
+    pub size: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FilePathsStatus {
+    pub paths: Vec<FilePathEntryStatus>,
+    pub missing_count: usize,
+    pub total_size: i64,
+}
+
+#[tauri::command]
+pub fn get_file_paths_status(
+    state: State<'_, ClipboardDbState>,
+    id: i64,
+) -> Result<FilePathsStatus, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let detail = db.get_item_detail(id).map_err(|e| e.to_string())?;
+    let detail = detail.ok_or("Item not found")?;
+    if detail.content_type != "file" {
+        return Err("Not a file item".into());
+    }
+    let raw = detail.file_path.ok_or("No file paths")?;
+    let paths = parse_stored_paths(&raw);
+    let meta = build_file_meta(&paths);
+    Ok(FilePathsStatus {
+        paths: meta
+            .paths
+            .into_iter()
+            .map(|entry| FilePathEntryStatus {
+                path: entry.path,
+                exists: entry.exists,
+                size: entry.size,
+            })
+            .collect(),
+        missing_count: meta.missing_count,
+        total_size: meta.total_size,
+    })
+}
+
+#[tauri::command]
+pub fn copy_files_to_clipboard(
+    state: State<'_, ClipboardDbState>,
+    item_id: i64,
+) -> Result<(), String> {
+    let _write_guard = OwnClipboardWriteGuard::begin();
+
+    let paths = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let detail = db.get_item_detail(item_id).map_err(|e| e.to_string())?;
+        let detail = detail.ok_or("Item not found")?;
+        if detail.content_type != "file" {
+            return Err("Not a file item".into());
+        }
+        let raw = detail.file_path.ok_or("No file paths")?;
+        parse_stored_paths(&raw)
+    };
+
+    if paths.is_empty() {
+        return Err("没有可复制的文件路径".into());
+    }
+
+    *LAST_CLIPBOARD_HASH.lock().unwrap() = hash_file_paths(&paths);
+    set_clipboard_files(&paths)
 }
 
 #[tauri::command]

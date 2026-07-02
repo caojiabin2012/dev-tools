@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CalculatorPanel } from './calculator-panel'
 import { ConverterPanel } from './converter'
-import { toolTabBarClass, toolTabButtonClass, toolContentClass } from '@/lib/tab-styles'
+import { toolTabButtonClass, toolTabBarClass, toolContentClass } from '@/lib/tab-styles'
 
 type CalculatorTab = 'calculator' | 'converter'
 
@@ -29,6 +29,7 @@ export function Calculator() {
           ))}
         </div>
       </div>
+
       <div className={toolContentClass}>
         {activeTab === 'calculator' ? <CalculatorPanel /> : <ConverterPanel />}
       </div>

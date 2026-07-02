@@ -79,6 +79,43 @@ export async function copyImageToClipboard(itemId: number): Promise<void> {
   return invoke('copy_image_to_clipboard', { itemId });
 }
 
+export async function copyFilesToClipboard(itemId: number): Promise<void> {
+  return invoke('copy_files_to_clipboard', { itemId });
+}
+
+export interface FilePathEntryStatus {
+  path: string;
+  exists: boolean;
+  size: number | null;
+}
+
+export interface FilePathsStatus {
+  paths: FilePathEntryStatus[];
+  missing_count: number;
+  total_size: number;
+}
+
+export async function getFilePathsStatus(id: number): Promise<FilePathsStatus> {
+  return invoke('get_file_paths_status', { id });
+}
+
+/** 解析 DB 中的 file_path（JSON 数组或旧版单路径） */
+export function parseFilePaths(filePath: string | null): string[] {
+  if (!filePath) return [];
+  const trimmed = filePath.trim();
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((p): p is string => typeof p === 'string');
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return [filePath];
+}
+
 export async function openFile(filePath: string): Promise<void> {
   return invoke('open_file', { filePath });
 }

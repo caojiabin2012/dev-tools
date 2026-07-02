@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ClipboardItemPreview } from '@/lib/clipboard-api';
+import { parseFilePaths } from '@/lib/clipboard-api';
 import { ClipboardImage } from './clipboard-image';
 import { detectJsonText } from '@/lib/json-detect';
 
@@ -87,6 +88,8 @@ export function ClipboardItemComponent({
   const isText = item.content_type === 'text';
   const isImage = item.content_type === 'image';
   const isFile = item.content_type === 'file';
+  const filePaths = isFile ? parseFilePaths(item.file_path) : [];
+  const isMultiFile = filePaths.length > 1;
   const jsonInfo = isText ? detectJsonText(item.content_text) : null;
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -159,15 +162,24 @@ export function ClipboardItemComponent({
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview(item.id);
+              }}
+              title="点击查看详情"
+            >
               <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
-                <span className="text-xl">{getFileIcon(item.file_name)}</span>
+                <span className="text-xl">{isMultiFile ? '📁' : getFileIcon(item.file_name)}</span>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-foreground truncate">
-                  {item.file_name || '未知文件'}
+                  {item.file_name || (isMultiFile ? `${filePaths.length} 个文件` : '未知文件')}
                 </p>
                 <p className="text-xs text-muted-foreground">
+                  {isMultiFile ? `${filePaths.length} 个文件` : ''}
+                  {isMultiFile && item.file_size ? ' · ' : ''}
                   {formatFileSize(item.file_size)}
                 </p>
               </div>
@@ -197,7 +209,7 @@ export function ClipboardItemComponent({
                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                 : 'hover:bg-background text-muted-foreground hover:text-blue-500'
             }`}
-            title={isFile ? '复制文件路径' : isImage ? '复制图片' : '复制文本'}
+            title={isFile ? '复制文件' : isImage ? '复制图片' : '复制文本'}
           >
             {showCopied ? (
               <span className="text-xs font-medium px-0.5">已复制</span>

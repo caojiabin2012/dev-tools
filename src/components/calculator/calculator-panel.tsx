@@ -14,14 +14,15 @@ const calcKeyDefault =
   'bg-secondary text-secondary-foreground hover:bg-accent'
 const calcKeyOperator =
   'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
-const calcToolBtnClass =
-  'rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
 
 function calcKeyClass(label: string, size: 'sm' | 'lg' = 'lg'): string {
   const sizeClass = size === 'sm' ? 'py-2 text-sm' : 'py-3.5 text-xl'
   const style = OPERATORS.has(label) ? calcKeyOperator : calcKeyDefault
   return `${calcKeyBase} ${sizeClass} ${style}`
 }
+
+const calcToolBtnClass =
+  'rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
 
 export function CalculatorPanel() {
   const [expression, setExpression] = useState('')
@@ -95,7 +96,7 @@ export function CalculatorPanel() {
   }
 
   const toggleAngleMode = () => {
-    setAngleMode(prev => prev === 'deg' ? 'rad' : 'deg')
+    setAngleMode((m) => (m === 'deg' ? 'rad' : 'deg'))
   }
 
   const handleScientificButton = (label: string) => {
@@ -158,29 +159,7 @@ export function CalculatorPanel() {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className="flex items-center gap-2 border-b border-border bg-background p-4">
-        <button
-          onClick={() => setShowScientific(!showScientific)}
-          className={calcToolBtnClass}
-        >
-          {showScientific ? '收起科学面板' : '科学面板'}
-        </button>
-        <button
-          onClick={toggleAngleMode}
-          className={calcToolBtnClass}
-        >
-          {angleMode === 'deg' ? 'Deg' : 'Rad'}
-        </button>
-        <div className="flex-1" />
-        <button
-          onClick={() => setShowHistory(!showHistory)}
-          className={calcToolBtnClass}
-        >
-          历史记录
-        </button>
-      </div>
-
-      <div className="border-b border-border bg-background p-4">
+      <div className="border-b border-border bg-background px-6 py-4">
         <input
           ref={inputRef}
           type="text"
@@ -196,8 +175,29 @@ export function CalculatorPanel() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2 border-b border-border px-6 py-2">
+        <button
+          type="button"
+          onClick={() => setShowScientific((v) => !v)}
+          className={calcToolBtnClass}
+        >
+          {showScientific ? '收起科学面板' : '科学面板'}
+        </button>
+        <button type="button" onClick={toggleAngleMode} className={calcToolBtnClass}>
+          {angleMode === 'deg' ? 'Deg' : 'Rad'}
+        </button>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setShowHistory((v) => !v)}
+          className={calcToolBtnClass}
+        >
+          历史记录
+        </button>
+      </div>
+
       {showScientific && (
-        <div className="border-b border-border bg-background px-4 py-3">
+        <div className="border-b border-border bg-background px-6 py-3">
           <div className="mx-auto max-w-sm space-y-2">
           {scientificRows.map((row, ri) => (
             <div key={ri} className="flex gap-2">
@@ -216,7 +216,7 @@ export function CalculatorPanel() {
         </div>
       )}
 
-      <div className="flex-1 bg-background px-4 py-3">
+      <div className="flex-1 bg-background px-6 py-3">
         <div className="mx-auto max-w-sm space-y-2">
         {standardButtons.map((row, ri) => (
           <div key={ri} className="flex gap-2">
@@ -257,7 +257,7 @@ export function CalculatorPanel() {
       </div>
 
       {showHistory && history.length > 0 && (
-        <div className="border-t border-border p-4 max-h-48 overflow-y-auto">
+        <div className="max-h-48 overflow-y-auto border-t border-border px-6 py-4">
           <h3 className="text-sm font-medium text-muted-foreground mb-2">历史记录</h3>
           {history.map((item, i) => (
             <div

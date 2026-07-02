@@ -98,7 +98,7 @@ export function ConverterPanel() {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className={`${subTabBarClass} overflow-x-auto px-3 py-3`}>
+      <div className={`${subTabBarClass} overflow-x-auto`}>
         <div className="flex min-w-max gap-2">
           {converterTypes.map((type) => (
             <button

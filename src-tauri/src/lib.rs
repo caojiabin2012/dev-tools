@@ -3,12 +3,14 @@ use tauri::{Emitter, Manager};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use crate::clipboard::{Database, ClipboardDbState, ClipboardMonitor};
+use crate::qrcode::{QrcodeDatabase, QrcodeDbState};
 use crate::settings::{SettingsState, AppSettings};
 
 mod app_paths;
 mod clipboard;
 mod diagnostics;
 mod ocr;
+mod qrcode;
 mod settings;
 mod window_chrome;
 
@@ -99,6 +101,11 @@ pub fn run() {
     let db = Database::new(&db_path_str).expect("Failed to initialize database");
     let db = Arc::new(Mutex::new(db));
 
+    let qr_db_path = app_dir.join("qrcode.db");
+    let qr_db_path_str = qr_db_path.to_str().unwrap_or("qrcode.db").to_string();
+    let qr_db = QrcodeDatabase::new(&qr_db_path_str).expect("Failed to initialize qrcode database");
+    let qr_db = Arc::new(Mutex::new(qr_db));
+
     let monitor = ClipboardMonitor::new(db.clone());
     monitor.start();
     log::info!("Clipboard monitor started");
@@ -137,6 +144,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .manage(ClipboardDbState { db })
+        .manage(QrcodeDbState { db: qr_db })
         .manage(SettingsState { settings })
         .invoke_handler(tauri::generate_handler![
             clipboard::get_clipboard_items,
@@ -148,6 +156,8 @@ pub fn run() {
             clipboard::copy_to_clipboard,
             clipboard::paste_from_clipboard,
             clipboard::copy_image_to_clipboard,
+            clipboard::copy_files_to_clipboard,
+            clipboard::get_file_paths_status,
             clipboard::open_file,
             clipboard::open_file_containing_folder,
             clipboard::ocr_image,
@@ -158,6 +168,18 @@ pub fn run() {
             settings::update_shortcuts,
             diagnostics::record_client_error,
             window_chrome::sync_window_theme,
+            qrcode::decode_qr_and_save,
+            qrcode::list_qr_decode_items,
+            qrcode::get_qr_decode_item,
+            qrcode::delete_qr_decode_item,
+            qrcode::clear_qr_decode_items,
+            qrcode::generate_qr_and_save,
+            qrcode::list_qr_generate_items,
+            qrcode::get_qr_generate_item,
+            qrcode::delete_qr_generate_item,
+            qrcode::clear_qr_generate_items,
+            qrcode::copy_qr_generate_to_clipboard,
+            qrcode::save_qr_generate_file,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
