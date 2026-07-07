@@ -25,7 +25,7 @@ const TOOL_HINTS: Partial<Record<ToolId, string>> = {
   'json-formatter': '美化 · 压缩 · 树形预览',
   clipboard: '历史记录 · 快速粘贴',
   calculator: '计算 · 单位换算',
-  calendar: '公历 · 农历 · 节假日',
+  'life-knowledge': '区划 · 车牌 · 邮编 · 日历 · 节气',
   encoding: 'Base64 · URL · 时间戳',
   generator: 'UUID · 密码 · Hash',
   qrcode: '解析 · 生成二维码',

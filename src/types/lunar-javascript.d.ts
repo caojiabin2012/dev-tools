@@ -1,11 +1,17 @@
 declare module 'lunar-javascript' {
   export class Solar {
     static fromYmd(year: number, month: number, day: number): Solar
+    getYear(): number
+    getMonth(): number
+    getDay(): number
     getLunar(): Lunar
     getFestivals(): string[]
   }
 
   export class Lunar {
+    static fromYmd(year: number, month: number, day: number): Lunar
+    getJieQiList(): string[]
+    getJieQiTable(): Record<string, Solar>
     getYear(): number
     getMonth(): number
     getDay(): number

@@ -1,13 +1,15 @@
 // 中国行政区划代码 (省/市/区县)
 // 数据来源：国家统计局
 
+import { mergeExtraDistricts } from './region-districts-extra'
+
 export interface RegionNode {
   code: string
   name: string
   children?: RegionNode[]
 }
 
-export const REGIONS: RegionNode[] = [
+const RAW_REGIONS: RegionNode[] = [
   {
     code: '110000', name: '北京市', children: [
       { code: '110100', name: '北京市', children: [
@@ -85,6 +87,7 @@ export const REGIONS: RegionNode[] = [
       { code: '130900', name: '沧州市' },
       { code: '131000', name: '廊坊市' },
       { code: '131100', name: '衡水市' },
+      { code: '133100', name: '雄安新区' },
     ]
   },
   {
@@ -377,6 +380,8 @@ export const REGIONS: RegionNode[] = [
     ]
   },
 ]
+
+export const REGIONS: RegionNode[] = mergeExtraDistricts(RAW_REGIONS)
 
 // 扁平化查询
 export interface FlatRegion {

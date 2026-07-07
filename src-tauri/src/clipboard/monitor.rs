@@ -1,19 +1,22 @@
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use sha2::{Sha256, Digest};
 use crate::clipboard::database::Database;
-use crate::clipboard::{clipboard_io_lock, LAST_CLIPBOARD_HASH, SKIP_NEXT_IMAGE};
-
-#[cfg(target_os = "windows")]
-static CLIPBOARD_DEBOUNCE_GEN: AtomicU64 = AtomicU64::new(0);
-use crate::clipboard::image_io::{
-    gif_dimensions, read_gif_from_path, is_gif_path, try_read_gif_from_clipboard_formats,
-    try_read_gif_from_hdrop, clipboard_has_gif_file,
-};
+use crate::clipboard::{schedule_clipboard_read, CLIPBOARD_WRITING, LAST_CLIPBOARD_HASH, SKIP_NEXT_IMAGE};
+use crate::clipboard::image_io::gif_dimensions;
 use crate::clipboard::file_io::{
-    get_clipboard_file_paths, paths_to_storage_json, build_file_meta, hash_file_paths,
-    should_save_as_file_record,
+    paths_to_storage_json, build_file_meta, hash_file_paths,
 };
+
+#[cfg(not(target_os = "windows"))]
+use crate::clipboard::clipboard_io_lock;
+#[cfg(not(target_os = "windows"))]
+use crate::clipboard::image_io::{
+    read_gif_from_path, is_gif_path, is_static_image_path, read_image_file_from_path,
+    try_read_gif_from_clipboard_formats, try_read_gif_from_hdrop, clipboard_has_gif_file,
+};
+#[cfg(not(target_os = "windows"))]
+use crate::clipboard::file_io::{get_clipboard_file_paths, should_save_as_file_record};
 
 #[cfg(target_os = "windows")]
 use windows::core::PCWSTR;
@@ -27,9 +30,9 @@ use windows::Win32::System::DataExchange::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW,
-    WM_CLIPBOARDUPDATE, WNDCLASSW, MSG, GWLP_USERDATA, SetWindowLongPtrW, GetWindowLongPtrW,
-    HWND_MESSAGE,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, PostQuitMessage,
+    RegisterClassW, WM_CLIPBOARDUPDATE, WNDCLASSW, MSG, GWLP_USERDATA, SetWindowLongPtrW,
+    GetWindowLongPtrW, HWND_MESSAGE,
 };
 
 pub struct ClipboardMonitor {
@@ -63,74 +66,107 @@ impl ClipboardMonitor {
 
         #[cfg(not(target_os = "windows"))]
         {
-            crate::clipboard::listener::start(db, running);
+            crate::clipboard::listener::start(running);
         }
     }
 
     #[cfg(target_os = "windows")]
     fn start_windows_listener(&self, db: Arc<Mutex<Database>>, running: Arc<Mutex<bool>>) {
         std::thread::spawn(move || {
-            unsafe {
-                let instance = GetModuleHandleW(None).unwrap();
-                let window_class = "DevToolsClipboardListener";
-                let window_class_w: Vec<u16> = window_class.encode_utf16().chain(std::iter::once(0)).collect();
-
-                let wnd_class = WNDCLASSW {
-                    lpfnWndProc: Some(wnd_proc),
-                    hInstance: instance.into(),
-                    lpszClassName: PCWSTR(window_class_w.as_ptr()),
-                    ..Default::default()
-                };
-
-                if RegisterClassW(&wnd_class) == 0 {
-                    log::error!("Failed to register clipboard listener window class");
-                    return;
+            loop {
+                if !*running.lock().unwrap() {
+                    break;
                 }
 
-                let hwnd = match CreateWindowExW(
-                    Default::default(),
-                    PCWSTR(window_class_w.as_ptr()),
-                    PCWSTR(std::ptr::null()),
-                    Default::default(),
-                    0, 0, 0, 0,
-                    Some(HWND_MESSAGE),
-                    None,
-                    Some(HINSTANCE(instance.0)),
-                    None,
-                ) {
-                    Ok(hwnd) => hwnd,
-                    Err(e) => {
-                        log::error!("Failed to create clipboard listener window: {:?}", e);
-                        return;
-                    }
-                };
-
-                let shared = Box::new(ClipboardShared { db, running });
-                let ptr = Box::into_raw(shared);
-                SetWindowLongPtrW(hwnd, GWLP_USERDATA, ptr as isize);
-
-                if let Err(e) = AddClipboardFormatListener(hwnd) {
-                    log::error!("Failed to add clipboard listener: {:?}", e);
-                    let _ = Box::from_raw(ptr);
-                    return;
+                let exited = run_windows_listener_once(&db, &running);
+                if !*running.lock().unwrap() {
+                    break;
                 }
-
-                log::info!("Clipboard event-driven listener started.");
-
-                let mut msg = MSG::default();
-                while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-                    DispatchMessageW(&msg);
+                if exited {
+                    log::warn!("Clipboard listener message loop exited, restarting in 1s...");
+                    std::thread::sleep(std::time::Duration::from_secs(1));
                 }
-
-                let _ = RemoveClipboardFormatListener(hwnd);
-                let _ = Box::from_raw(ptr);
             }
+            log::info!("Clipboard Windows listener stopped.");
         });
     }
 }
 
+#[cfg(target_os = "windows")]
+fn run_windows_listener_once(_db: &Arc<Mutex<Database>>, running: &Arc<Mutex<bool>>) -> bool {
+    unsafe {
+        let instance = GetModuleHandleW(None).unwrap();
+        let window_class = "DevToolsClipboardListener";
+        let window_class_w: Vec<u16> = window_class.encode_utf16().chain(std::iter::once(0)).collect();
+
+        let wnd_class = WNDCLASSW {
+            lpfnWndProc: Some(wnd_proc),
+            hInstance: instance.into(),
+            lpszClassName: PCWSTR(window_class_w.as_ptr()),
+            ..Default::default()
+        };
+
+        if RegisterClassW(&wnd_class) == 0 {
+            use windows::Win32::Foundation::GetLastError;
+            // 1410 = ERROR_CLASS_ALREADY_EXISTS，listener 重启时可忽略
+            if GetLastError().0 != 1410 {
+                log::error!(
+                    "Failed to register clipboard listener window class: {:?}",
+                    GetLastError()
+                );
+                return false;
+            }
+        }
+
+        let hwnd = match CreateWindowExW(
+            Default::default(),
+            PCWSTR(window_class_w.as_ptr()),
+            PCWSTR(std::ptr::null()),
+            Default::default(),
+            0, 0, 0, 0,
+            Some(HWND_MESSAGE),
+            None,
+            Some(HINSTANCE(instance.0)),
+            None,
+        ) {
+            Ok(hwnd) => hwnd,
+            Err(e) => {
+                log::error!("Failed to create clipboard listener window: {:?}", e);
+                return false;
+            }
+        };
+
+        let shared = Box::new(ClipboardShared {
+            running: running.clone(),
+        });
+        let ptr = Box::into_raw(shared);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, ptr as isize);
+
+        if let Err(e) = AddClipboardFormatListener(hwnd) {
+            log::error!("Failed to add clipboard listener: {:?}", e);
+            let _ = Box::from_raw(ptr);
+            return false;
+        }
+
+        log::info!("Clipboard event-driven listener started.");
+
+        let mut msg = MSG::default();
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            if !*running.lock().unwrap() {
+                PostQuitMessage(0);
+                break;
+            }
+            DispatchMessageW(&msg);
+        }
+
+        let _ = RemoveClipboardFormatListener(hwnd);
+        let _ = DestroyWindow(hwnd);
+        let _ = Box::from_raw(ptr);
+        true
+    }
+}
+
 struct ClipboardShared {
-    db: Arc<Mutex<Database>>,
     running: Arc<Mutex<bool>>,
 }
 
@@ -138,29 +174,14 @@ struct ClipboardShared {
 unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_CLIPBOARDUPDATE => {
-            // 同步读剪贴板会与写操作并发，Windows 上可能崩溃；延迟到后台线程处理
-            if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
+            if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) || CLIPBOARD_WRITING.load(Ordering::SeqCst) {
                 return LRESULT(0);
             }
             let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
             if ptr != 0 {
                 let shared = &*(ptr as *const ClipboardShared);
                 if *shared.running.lock().unwrap() {
-                    let db = shared.db.clone();
-                    // 连续复制会触发多次 WM_CLIPBOARDUPDATE；只处理最后一次，避免线程堆积并发读剪贴板
-                    let generation = CLIPBOARD_DEBOUNCE_GEN.fetch_add(1, Ordering::SeqCst) + 1;
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(120));
-                        if CLIPBOARD_DEBOUNCE_GEN.load(Ordering::SeqCst) != generation {
-                            return;
-                        }
-                        if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
-                            return;
-                        }
-                        if let Err(e) = read_and_save_clipboard(&db) {
-                            log::trace!("Clipboard read error: {}", e);
-                        }
-                    });
+                    schedule_clipboard_read();
                 }
             }
             LRESULT(0)
@@ -203,10 +224,53 @@ fn save_gif_if_changed(
 
 enum CapturedClipboard {
     Gif(Vec<u8>),
+    ImageFile {
+        data: Vec<u8>,
+        width: i32,
+        height: i32,
+        mime: &'static str,
+    },
     RgbaImage { bytes: Vec<u8>, width: u32, height: u32 },
     Text(String),
     Files(Vec<std::path::PathBuf>),
     SkipGifFallback,
+}
+
+fn save_image_file_if_changed(
+    db: &Arc<Mutex<Database>>,
+    data: Vec<u8>,
+    width: i32,
+    height: i32,
+    mime: &str,
+) -> Result<(), String> {
+    if SKIP_NEXT_IMAGE.swap(false, Ordering::SeqCst) {
+        *LAST_CLIPBOARD_HASH.lock().unwrap() = hash_bytes(&data);
+        return Ok(());
+    }
+
+    let hash = hash_bytes(&data);
+    let hash_changed = {
+        let h = LAST_CLIPBOARD_HASH.lock().unwrap();
+        *h != hash
+    };
+
+    if !hash_changed {
+        return Ok(());
+    }
+
+    *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
+    log::info!(
+        "Detected clipboard image file: {width}x{height}, {} bytes ({mime})",
+        data.len()
+    );
+
+    let db = db.lock().unwrap();
+    if let Err(e) = db.add_image_item(&data, width, height, mime) {
+        log::error!("Failed to save clipboard image file: {e}");
+    } else {
+        log::info!("Saved clipboard image file: {width}x{height}");
+    }
+    Ok(())
 }
 
 fn save_files_if_changed(
@@ -253,37 +317,96 @@ fn save_files_if_changed(
     Ok(())
 }
 
-fn capture_clipboard_content() -> Result<CapturedClipboard, String> {
-    let _io_guard = clipboard_io_lock();
+const MAX_IMAGE_DIMENSION: u32 = 4096;
+const MAX_IMAGE_PIXELS: u64 = 8_000_000;
 
+fn downscale_rgba_if_needed(bytes: Vec<u8>, width: u32, height: u32) -> Option<(Vec<u8>, u32, u32)> {
+    let pixels = width as u64 * height as u64;
+    if width <= MAX_IMAGE_DIMENSION && height <= MAX_IMAGE_DIMENSION && pixels <= MAX_IMAGE_PIXELS {
+        return Some((bytes, width, height));
+    }
+
+    let img = image::RgbaImage::from_raw(width, height, bytes)?;
+    let scale = (MAX_IMAGE_DIMENSION as f64 / width.max(height) as f64)
+        .min((MAX_IMAGE_PIXELS as f64 / pixels as f64).sqrt());
+    let new_w = ((width as f64 * scale).round() as u32).max(1);
+    let new_h = ((height as f64 * scale).round() as u32).max(1);
+    let resized = image::imageops::resize(&img, new_w, new_h, image::imageops::FilterType::Triangle);
+    log::info!(
+        "Downscaled clipboard image from {width}x{height} to {new_w}x{new_h}"
+    );
+    Some((resized.into_raw(), new_w, new_h))
+}
+
+
+fn capture_clipboard_content() -> Result<CapturedClipboard, String> {
     if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
         return Ok(CapturedClipboard::SkipGifFallback);
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        return match crate::clipboard::win_io::capture_content()? {
+            crate::clipboard::win_io::WinCapture::Gif(data) => Ok(CapturedClipboard::Gif(data)),
+            crate::clipboard::win_io::WinCapture::ImageFile {
+                data,
+                width,
+                height,
+                mime,
+            } => Ok(CapturedClipboard::ImageFile {
+                data,
+                width,
+                height,
+                mime,
+            }),
+            crate::clipboard::win_io::WinCapture::Rgba { bytes, width, height } => {
+                Ok(CapturedClipboard::RgbaImage { bytes, width, height })
+            }
+            crate::clipboard::win_io::WinCapture::Text(text) => finalize_text_capture(text),
+            crate::clipboard::win_io::WinCapture::Files(paths) => Ok(CapturedClipboard::Files(paths)),
+            crate::clipboard::win_io::WinCapture::Empty => Ok(CapturedClipboard::SkipGifFallback),
+        };
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    capture_clipboard_content_non_windows()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn capture_clipboard_content_non_windows() -> Result<CapturedClipboard, String> {
+    let _io_guard = clipboard_io_lock();
+
     let file_paths = get_clipboard_file_paths();
 
-    // 1. 复制单个 .gif 文件：保留动画
     if let Some(ref paths) = file_paths {
-        if paths.len() == 1 && is_gif_path(&paths[0]) {
-            if let Some(gif_data) = read_gif_from_path(&paths[0]) {
-                return Ok(CapturedClipboard::Gif(gif_data));
+        if paths.len() == 1 {
+            if is_gif_path(&paths[0]) {
+                if let Some(gif_data) = read_gif_from_path(&paths[0]) {
+                    return Ok(CapturedClipboard::Gif(gif_data));
+                }
+            } else if is_static_image_path(&paths[0]) {
+                if let Some(img) = read_image_file_from_path(&paths[0]) {
+                    return Ok(CapturedClipboard::ImageFile {
+                        data: img.data,
+                        width: img.width,
+                        height: img.height,
+                        mime: img.mime,
+                    });
+                }
             }
         }
     }
 
-    // 1b. HDROP 兜底（arboard 有时读不到文件列表）
     if file_paths.is_none() {
         if let Some(gif_data) = try_read_gif_from_hdrop() {
             return Ok(CapturedClipboard::Gif(gif_data));
         }
     }
 
-    // 2. 剪贴板上的 GIF 格式 / 嵌入 GIF 数据
     if let Some(gif_data) = try_read_gif_from_clipboard_formats() {
         return Ok(CapturedClipboard::Gif(gif_data));
     }
 
-    // 剪贴板上是 .gif 文件但读取失败时，不要用静态缩略图覆盖
     if clipboard_has_gif_file() {
         let only_gif_files = file_paths.as_ref().is_none_or(|paths| {
             !paths.is_empty() && paths.iter().all(|p| is_gif_path(p))
@@ -294,7 +417,6 @@ fn capture_clipboard_content() -> Result<CapturedClipboard, String> {
         }
     }
 
-    // 3. 多文件 / 非 GIF 单文件
     if let Some(paths) = file_paths {
         if should_save_as_file_record(&paths) {
             return Ok(CapturedClipboard::Files(paths));
@@ -332,34 +454,35 @@ fn capture_clipboard_content() -> Result<CapturedClipboard, String> {
             return Ok(CapturedClipboard::RgbaImage { bytes, width, height });
         }
         Err(arboard::Error::ContentNotAvailable) => {}
-        Err(arboard::Error::ClipboardOccupied) => return Ok(CapturedClipboard::SkipGifFallback),
+        Err(arboard::Error::ClipboardOccupied) => return Err("ClipboardOccupied".into()),
         Err(_) => {}
     }
 
     match clipboard.get_text() {
-        Ok(text) => {
-            let normalized = text.trim().to_string();
-            if normalized.is_empty() {
-                return Ok(CapturedClipboard::SkipGifFallback);
-            }
-
-            let hash = hash_text(&normalized);
-            let hash_changed = {
-                let h = LAST_CLIPBOARD_HASH.lock().unwrap();
-                *h != hash
-            };
-
-            if !hash_changed {
-                return Ok(CapturedClipboard::SkipGifFallback);
-            }
-
-            *LAST_CLIPBOARD_HASH.lock().unwrap() = hash.clone();
-            Ok(CapturedClipboard::Text(normalized))
-        }
+        Ok(text) => finalize_text_capture(text.trim().to_string()),
         Err(arboard::Error::ContentNotAvailable) => Ok(CapturedClipboard::SkipGifFallback),
-        Err(arboard::Error::ClipboardOccupied) => Ok(CapturedClipboard::SkipGifFallback),
-        Err(_) => Ok(CapturedClipboard::SkipGifFallback),
+        Err(arboard::Error::ClipboardOccupied) => Err("ClipboardOccupied".into()),
+        Err(e) => Err(e.to_string()),
     }
+}
+
+fn finalize_text_capture(normalized: String) -> Result<CapturedClipboard, String> {
+    if normalized.is_empty() {
+        return Ok(CapturedClipboard::SkipGifFallback);
+    }
+
+    let hash = hash_text(&normalized);
+    let hash_changed = {
+        let h = LAST_CLIPBOARD_HASH.lock().unwrap();
+        *h != hash
+    };
+
+    if !hash_changed {
+        return Ok(CapturedClipboard::SkipGifFallback);
+    }
+
+    *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
+    Ok(CapturedClipboard::Text(normalized))
 }
 
 pub(crate) fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), String> {
@@ -367,8 +490,17 @@ pub(crate) fn read_and_save_clipboard(db: &Arc<Mutex<Database>>) -> Result<(), S
 
     match captured {
         CapturedClipboard::Gif(gif_data) => save_gif_if_changed(db, gif_data),
+        CapturedClipboard::ImageFile {
+            data,
+            width,
+            height,
+            mime,
+        } => save_image_file_if_changed(db, data, width, height, mime),
         CapturedClipboard::RgbaImage { bytes, width, height } => {
-            // arboard 已返回 RGBA 格式，勿再做 BGRA 转换（否则红蓝通道会互换导致偏色）
+            let Some((bytes, width, height)) = downscale_rgba_if_needed(bytes, width, height) else {
+                return Ok(());
+            };
+            // RGBA 格式，勿再做 BGRA 转换（否则红蓝通道会互换导致偏色）
             if let Some(img) = image::RgbaImage::from_raw(width, height, bytes) {
                 let mut png_buf: Vec<u8> = Vec::new();
                 if img

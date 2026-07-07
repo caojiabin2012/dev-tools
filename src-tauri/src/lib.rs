@@ -90,6 +90,7 @@ fn register_shortcuts(app: &tauri::App, shortcuts: &std::collections::HashMap<St
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     diagnostics::install_panic_hook();
+    diagnostics::install_native_crash_handler();
 
     let log_dir = crate::app_paths::logs_dir();
 
@@ -100,6 +101,8 @@ pub fn run() {
 
     let db = Database::new(&db_path_str).expect("Failed to initialize database");
     let db = Arc::new(Mutex::new(db));
+
+    crate::clipboard::start_clipboard_worker(db.clone());
 
     let qr_db_path = app_dir.join("qrcode.db");
     let qr_db_path_str = qr_db_path.to_str().unwrap_or("qrcode.db").to_string();

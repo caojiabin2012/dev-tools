@@ -2,13 +2,19 @@ use std::sync::{Arc, Mutex};
 use tauri::State;
 use sha2::{Sha256, Digest};
 use crate::clipboard::database::{Database, ClipboardItemPreview, ClipboardItem};
-use crate::clipboard::{clipboard_io_lock, LAST_CLIPBOARD_HASH, OwnClipboardWriteGuard};
-use crate::clipboard::image_io::{
-    set_clipboard_gif, set_clipboard_static_image, is_gif, image_mime_type,
-};
+use crate::clipboard::{LAST_CLIPBOARD_HASH, OwnClipboardWriteGuard};
+#[cfg(not(target_os = "windows"))]
+use crate::clipboard::clipboard_io_lock;
+#[cfg(target_os = "windows")]
+use crate::clipboard::win_io;
+use crate::clipboard::image_io::{is_gif, image_mime_type};
 use crate::clipboard::file_io::{
-    parse_stored_paths, hash_file_paths, set_clipboard_files, build_file_meta,
+    parse_stored_paths, hash_file_paths, build_file_meta,
 };
+#[cfg(not(target_os = "windows"))]
+use crate::clipboard::image_io::{set_clipboard_gif, set_clipboard_static_image};
+#[cfg(not(target_os = "windows"))]
+use crate::clipboard::file_io::set_clipboard_files;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 
@@ -87,21 +93,36 @@ pub fn clear_clipboard_history(
 #[tauri::command]
 pub fn copy_to_clipboard(text: String) -> Result<(), String> {
     let _write_guard = OwnClipboardWriteGuard::begin();
-    let _io_guard = clipboard_io_lock();
 
-    // Hash BEFORE writing so monitor won't re-capture
     let hash = hash_bytes(text.as_bytes());
     *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
 
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard.set_text(text).map_err(|e| e.to_string())?;
-    Ok(())
+    #[cfg(target_os = "windows")]
+    {
+        return crate::clipboard::clipboard_set_text(text);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _io_guard = clipboard_io_lock();
+        let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+        clipboard.set_text(text).map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
 pub fn paste_from_clipboard() -> Result<String, String> {
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard.get_text().map_err(|e| e.to_string())
+    #[cfg(target_os = "windows")]
+    {
+        return crate::clipboard::clipboard_get_text();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _io_guard = clipboard_io_lock();
+        let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+        clipboard.get_text().map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
@@ -133,16 +154,27 @@ pub fn copy_image_to_clipboard(state: State<'_, ClipboardDbState>, item_id: i64)
     if mime_type == "image/gif" || is_gif(&image_data) {
         let hash = hash_bytes(&image_data);
         *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
+        #[cfg(target_os = "windows")]
+        return crate::clipboard::clipboard_set_gif(image_data);
+        #[cfg(not(target_os = "windows"))]
         return set_clipboard_gif(&image_data);
     }
 
-    // 监听器通过 arboard 读回 RGBA，hash 需与读回结果一致
-    let img = image::load_from_memory(&image_data).map_err(|e| e.to_string())?;
-    let rgba = img.to_rgba8();
-    let hash = hash_bytes(rgba.as_raw());
-    *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
+    #[cfg(target_os = "windows")]
+    {
+        let hash = win_io::hash_png_as_rgba(&image_data)?;
+        *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
+        return crate::clipboard::clipboard_set_png(image_data);
+    }
 
-    set_clipboard_static_image(&image_data)
+    #[cfg(not(target_os = "windows"))]
+    {
+        let img = image::load_from_memory(&image_data).map_err(|e| e.to_string())?;
+        let rgba = img.to_rgba8();
+        let hash = hash_bytes(rgba.as_raw());
+        *LAST_CLIPBOARD_HASH.lock().unwrap() = hash;
+        set_clipboard_static_image(&image_data)
+    }
 }
 
 fn hash_bytes(data: &[u8]) -> String {
@@ -217,6 +249,11 @@ pub fn copy_files_to_clipboard(
     }
 
     *LAST_CLIPBOARD_HASH.lock().unwrap() = hash_file_paths(&paths);
+
+    #[cfg(target_os = "windows")]
+    return crate::clipboard::clipboard_set_files(paths);
+
+    #[cfg(not(target_os = "windows"))]
     set_clipboard_files(&paths)
 }
 

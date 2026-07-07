@@ -3,11 +3,11 @@ import { listen } from '@tauri-apps/api/event'
 import { JsonFormatter } from '@/components/json-formatter'
 import { ClipboardManager } from '@/components/clipboard'
 import { Calculator } from '@/components/calculator'
-import { Calendar } from '@/components/calendar'
 import { IdCardTool } from '@/components/id-card'
 import { EncodingTool } from '@/components/encoding'
 import { GeneratorTool } from '@/components/generator'
 import { DevTool } from '@/components/dev-tool'
+import { LifeKnowledgeTool } from '@/components/life-knowledge'
 import { QrcodeTool } from '@/components/qrcode'
 import { ToastContainer } from '@/lib/toast'
 
@@ -20,7 +20,7 @@ import { useUpdate } from '@/lib/use-update'
 export type ToolId =
   | 'home'
   | 'json-formatter' | 'clipboard' | 'calculator' | 'calendar'
-  | 'id-card' | 'encoding' | 'generator' | 'dev-tool' | 'qrcode'
+  | 'id-card' | 'encoding' | 'generator' | 'dev-tool' | 'qrcode' | 'life-knowledge'
   | 'settings'
 
 interface ToolGroup {
@@ -41,12 +41,13 @@ const toolGroups: ToolGroup[] = [
       { id: 'qrcode', name: '二维码', icon: '🔳' },
       { id: 'dev-tool', name: '表达式', icon: '🛠️' },
       { id: 'id-card', name: '身份证', icon: '🪪' },
+      { id: 'life-knowledge', name: '生活常识', icon: '📖' },
     ],
   },
 ]
 
 /** 暂不展示的工具入口，功能代码保留 */
-const hiddenTools: ToolId[] = []
+const hiddenTools: ToolId[] = ['calendar']
 
 function filterToolGroups(groups: ToolGroup[], hidden: ToolId[]): ToolGroup[] {
   return groups
@@ -111,9 +112,6 @@ export default function App() {
           <ClipboardManager onFormatJson={openJsonFormatter} />
         )}
         {activeTool === 'calculator' && <Calculator />}
-        <div className={activeTool === 'calendar' ? 'h-full' : 'h-0 overflow-hidden'}>
-          <Calendar />
-        </div>
         <div className={activeTool === 'id-card' ? 'h-full' : 'h-0 overflow-hidden'}>
           <IdCardTool />
         </div>
@@ -122,6 +120,9 @@ export default function App() {
         </div>
         <div className={activeTool === 'generator' ? 'h-full' : 'h-0 overflow-hidden'}>
           <GeneratorTool />
+        </div>
+        <div className={activeTool === 'life-knowledge' ? 'h-full' : 'h-0 overflow-hidden'}>
+          <LifeKnowledgeTool />
         </div>
         <div className={activeTool === 'qrcode' ? 'h-full' : 'h-0 overflow-hidden'}>
           <QrcodeTool />

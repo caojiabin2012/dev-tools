@@ -5,20 +5,14 @@
 //!   仅在计数变化时读取内容，不做全量轮询。
 
 use std::io;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use clipboard_master::{CallbackResult, ClipboardHandler, Master};
 
-use crate::clipboard::database::Database;
-use crate::clipboard::monitor::read_and_save_clipboard;
-use crate::clipboard::SKIP_NEXT_IMAGE;
-
-static CLIPBOARD_DEBOUNCE_GEN: AtomicU64 = AtomicU64::new(0);
+use crate::clipboard::{schedule_clipboard_read, SKIP_NEXT_IMAGE};
 
 struct ClipboardChangeHandler {
-    db: Arc<Mutex<Database>>,
     running: Arc<Mutex<bool>>,
 }
 
@@ -45,26 +39,11 @@ impl ClipboardHandler for ClipboardChangeHandler {
             return CallbackResult::Stop;
         }
 
-        if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
+        if SKIP_NEXT_IMAGE.load(std::sync::atomic::Ordering::SeqCst) {
             return CallbackResult::Next;
         }
 
-        let db = self.db.clone();
-        let generation = CLIPBOARD_DEBOUNCE_GEN.fetch_add(1, Ordering::SeqCst) + 1;
-
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(120));
-            if CLIPBOARD_DEBOUNCE_GEN.load(Ordering::SeqCst) != generation {
-                return;
-            }
-            if SKIP_NEXT_IMAGE.load(Ordering::SeqCst) {
-                return;
-            }
-            if let Err(e) = read_and_save_clipboard(&db) {
-                log::trace!("Clipboard read error: {}", e);
-            }
-        });
-
+        schedule_clipboard_read();
         CallbackResult::Next
     }
 
@@ -74,9 +53,9 @@ impl ClipboardHandler for ClipboardChangeHandler {
     }
 }
 
-pub fn start(db: Arc<Mutex<Database>>, running: Arc<Mutex<bool>>) {
+pub fn start(running: Arc<Mutex<bool>>) {
     std::thread::spawn(move || {
-        let handler = ClipboardChangeHandler { db, running: running.clone() };
+        let handler = ClipboardChangeHandler { running: running.clone() };
 
         let mut master = match Master::new(handler) {
             Ok(master) => master,

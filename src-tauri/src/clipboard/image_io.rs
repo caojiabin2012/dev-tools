@@ -1,5 +1,6 @@
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
+
+use image::GenericImageView;
 
 pub fn is_gif(data: &[u8]) -> bool {
     data.len() >= 6 && &data[0..3] == b"GIF" && (&data[3..6] == b"87a" || &data[3..6] == b"89a")
@@ -60,42 +61,9 @@ pub fn try_read_gif_from_file_list_paths(paths: &[PathBuf]) -> Option<Vec<u8>> {
     None
 }
 
-#[cfg(target_os = "windows")]
-pub fn try_read_gif_from_hdrop() -> Option<Vec<u8>> {
-    use clipboard_win::{formats, is_format_avail, raw};
-
-    let _clip = clipboard_win::Clipboard::new_attempts(10).ok()?;
-    if !is_format_avail(formats::CF_HDROP) {
-        return None;
-    }
-
-    let mut paths = Vec::new();
-    raw::get_file_list_path(&mut paths).ok()?;
-    try_read_gif_from_file_list_paths(&paths)
-}
-
 #[cfg(not(target_os = "windows"))]
 pub fn try_read_gif_from_hdrop() -> Option<Vec<u8>> {
     None
-}
-
-#[cfg(target_os = "windows")]
-pub fn clipboard_has_gif_file() -> bool {
-    use clipboard_win::{formats, is_format_avail, raw};
-
-    let Ok(_clip) = clipboard_win::Clipboard::new_attempts(10) else {
-        return false;
-    };
-    if !is_format_avail(formats::CF_HDROP) {
-        return false;
-    }
-
-    let mut paths = Vec::new();
-    if raw::get_file_list_path(&mut paths).is_err() {
-        return false;
-    }
-
-    paths.iter().any(|p| is_gif_path(p))
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -103,55 +71,12 @@ pub fn clipboard_has_gif_file() -> bool {
     false
 }
 
-#[cfg(target_os = "windows")]
-pub fn try_read_gif_from_clipboard_formats() -> Option<Vec<u8>> {
-    use clipboard_win::{is_format_avail, raw, EnumFormats};
-
-    let _clip = clipboard_win::Clipboard::new_attempts(10).ok()?;
-
-    for name in ["GIF", "gif", "GIF Format"] {
-        if let Some(data) = read_format_if_gif(name) {
-            log::info!("Read GIF from clipboard format '{name}'");
-            return Some(data);
-        }
-    }
-
-    for format_id in EnumFormats::new() {
-        if !is_format_avail(format_id) {
-            continue;
-        }
-        let mut data = Vec::new();
-        if raw::get_vec(format_id, &mut data).is_err() {
-            continue;
-        }
-        if let Some(gif) = extract_gif_payload(&data) {
-            log::info!("Read embedded GIF from clipboard format id {format_id}");
-            return Some(gif);
-        }
-    }
-
-    None
-}
-
 #[cfg(not(target_os = "windows"))]
 pub fn try_read_gif_from_clipboard_formats() -> Option<Vec<u8>> {
     None
 }
 
-#[cfg(target_os = "windows")]
-fn read_format_if_gif(name: &str) -> Option<Vec<u8>> {
-    use clipboard_win::{is_format_avail, raw, register_format};
-
-    let format = register_format(name)?;
-    if !is_format_avail(format.get()) {
-        return None;
-    }
-    let mut data = Vec::new();
-    raw::get_vec(format.get(), &mut data).ok()?;
-    extract_gif_payload(&data)
-}
-
-/// 将 PNG/静态图写入剪贴板（Windows 原生 API，避免 arboard 写时与监听器冲突崩溃）
+/// 将 PNG/静态图写入剪贴板
 pub fn set_clipboard_static_image(data: &[u8]) -> Result<(), String> {
     if is_gif(data) {
         return set_clipboard_gif(data);
@@ -159,21 +84,7 @@ pub fn set_clipboard_static_image(data: &[u8]) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        use clipboard_win::{raw, register_format};
-        use crate::clipboard::clipboard_io_lock;
-
-        let _io_guard = clipboard_io_lock();
-        let _clip = clipboard_win::Clipboard::new_attempts(10)
-            .map_err(|e| format!("Failed to open clipboard: {e:?}"))?;
-
-        raw::empty().map_err(|e| format!("Failed to empty clipboard: {e:?}"))?;
-
-        let png_format =
-            register_format("PNG").ok_or("Failed to register PNG clipboard format")?;
-        raw::set_without_clear(png_format.get(), data)
-            .map_err(|e| format!("Failed to set PNG on clipboard: {e:?}"))?;
-
-        Ok(())
+        return crate::clipboard::clipboard_set_png(data.to_vec());
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -192,8 +103,7 @@ pub fn set_clipboard_static_image(data: &[u8]) -> Result<(), String> {
             height: height as usize,
             bytes: std::borrow::Cow::Owned(bytes),
         };
-        clipboard.set_image(img_data).map_err(|e| e.to_string())?;
-        Ok(())
+        clipboard.set_image(img_data).map_err(|e| e.to_string())
     }
 }
 
@@ -205,32 +115,7 @@ pub fn set_clipboard_gif(data: &[u8]) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        use clipboard_win::{raw, register_format};
-        use crate::clipboard::clipboard_io_lock;
-
-        let _io_guard = clipboard_io_lock();
-        let _clip = clipboard_win::Clipboard::new_attempts(10)
-            .map_err(|e| format!("Failed to open clipboard: {e:?}"))?;
-
-        raw::empty().map_err(|e| format!("Failed to empty clipboard: {e:?}"))?;
-
-        let gif_format = register_format("GIF").ok_or("Failed to register GIF clipboard format")?;
-        raw::set_without_clear(gif_format.get(), data)
-            .map_err(|e| format!("Failed to set GIF on clipboard: {e:?}"))?;
-
-        if let Ok(img) = image::load_from_memory(data) {
-            let mut png_buf = Vec::new();
-            if img
-                .write_to(&mut Cursor::new(&mut png_buf), image::ImageFormat::Png)
-                .is_ok()
-            {
-                if let Some(png_format) = register_format("PNG") {
-                    let _ = raw::set_without_clear(png_format.get(), &png_buf);
-                }
-            }
-        }
-
-        Ok(())
+        return crate::clipboard::clipboard_set_gif(data.to_vec());
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -243,4 +128,67 @@ pub fn is_gif_path(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| ext.eq_ignore_ascii_case("gif"))
+}
+
+/// 资源管理器复制的单张静态图片（jpg/png 等），应按图片入库而非 file 记录。
+pub fn is_static_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "jpg" | "jpeg" | "png" | "webp" | "bmp"
+            )
+        })
+}
+
+pub fn mime_from_path(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+    {
+        Some(ext) if ext == "jpg" || ext == "jpeg" => "image/jpeg",
+        Some(ext) if ext == "png" => "image/png",
+        Some(ext) if ext == "webp" => "image/webp",
+        Some(ext) if ext == "bmp" => "image/bmp",
+        _ => "application/octet-stream",
+    }
+}
+
+const MAX_IMAGE_FILE_BYTES: usize = 64 * 1024 * 1024;
+
+pub struct ImageFileData {
+    pub data: Vec<u8>,
+    pub width: i32,
+    pub height: i32,
+    pub mime: &'static str,
+}
+
+/// 从复制的单个图片文件路径读取原图（保留 jpeg/png 等原始字节）。
+pub fn read_image_file_from_path(path: &Path) -> Option<ImageFileData> {
+    let data = std::fs::read(path).ok()?;
+    if data.len() > MAX_IMAGE_FILE_BYTES {
+        log::warn!(
+            "Image file too large ({} bytes): {}",
+            data.len(),
+            path.display()
+        );
+        return None;
+    }
+    let img = image::load_from_memory(&data).ok()?;
+    let (w, h) = img.dimensions();
+    log::info!(
+        "Read image from copied file: {} ({}x{}, {} bytes)",
+        path.display(),
+        w,
+        h,
+        data.len()
+    );
+    Some(ImageFileData {
+        data,
+        width: w as i32,
+        height: h as i32,
+        mime: mime_from_path(path),
+    })
 }

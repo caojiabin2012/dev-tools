@@ -1,6 +1,6 @@
 [package]
 name = "DevTools"
-version = "0.4.10"
+version = "0.4.11"
 description = "DevTools"
 authors = ["cao.jiabin"]
 license = ""
@@ -65,6 +65,8 @@ windows = { version = "0.61", features = [
     "Win32_System_DataExchange",
     "Win32_System_LibraryLoader",
     "Win32_System_Threading",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Kernel",
     "Win32_Graphics_Dwm",
 ] }
 

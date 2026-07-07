@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(not(target_os = "windows"))]
 use crate::clipboard::clipboard_io_lock;
 use crate::clipboard::image_io::is_gif_path;
 
@@ -20,7 +21,8 @@ pub struct FileClipboardMeta {
     pub missing_count: usize,
 }
 
-/// 从剪贴板读取文件路径（arboard + HDROP 兜底）
+/// 从剪贴板读取文件路径（非 Windows；Windows 见 `win_io`）。
+#[cfg(not(target_os = "windows"))]
 pub fn get_clipboard_file_paths() -> Option<Vec<PathBuf>> {
     if let Ok(mut clipboard) = arboard::Clipboard::new() {
         if let Ok(files) = clipboard.get().file_list() {
@@ -29,30 +31,6 @@ pub fn get_clipboard_file_paths() -> Option<Vec<PathBuf>> {
             }
         }
     }
-
-    read_paths_from_hdrop()
-}
-
-#[cfg(target_os = "windows")]
-fn read_paths_from_hdrop() -> Option<Vec<PathBuf>> {
-    use clipboard_win::{formats, is_format_avail, raw};
-
-    let _clip = clipboard_win::Clipboard::new_attempts(10).ok()?;
-    if !is_format_avail(formats::CF_HDROP) {
-        return None;
-    }
-
-    let mut paths = Vec::new();
-    raw::get_file_list_path(&mut paths).ok()?;
-    if paths.is_empty() {
-        None
-    } else {
-        Some(paths)
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn read_paths_from_hdrop() -> Option<Vec<PathBuf>> {
     None
 }
 
@@ -158,15 +136,7 @@ pub fn set_clipboard_files(paths: &[String]) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        use clipboard_win::{raw, Clipboard};
-
-        let _io_guard = clipboard_io_lock();
-        let _clip = Clipboard::new_attempts(10)
-            .map_err(|e| format!("Failed to open clipboard: {e:?}"))?;
-
-        raw::empty().map_err(|e| format!("Failed to empty clipboard: {e:?}"))?;
-        raw::set_file_list(&existing).map_err(|e| format!("Failed to set file list: {e:?}"))?;
-        Ok(())
+        return crate::clipboard::clipboard_set_files(existing);
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -182,13 +152,16 @@ pub fn set_clipboard_files(paths: &[String]) -> Result<(), String> {
     }
 }
 
-/// 单个 .gif 文件仍走 GIF 动图逻辑；多文件或非 GIF 单文件走 file 记录
+/// 单个 .gif / 静态图片文件走图片逻辑；多文件或非图片单文件走 file 记录。
 pub fn should_save_as_file_record(paths: &[PathBuf]) -> bool {
     if paths.is_empty() {
         return false;
     }
-    if paths.len() == 1 && is_gif_path(&paths[0]) {
-        return false;
+    if paths.len() == 1 {
+        let path = &paths[0];
+        if is_gif_path(path) || crate::clipboard::image_io::is_static_image_path(path) {
+            return false;
+        }
     }
     true
 }
